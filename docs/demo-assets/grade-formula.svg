@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 280" role="img" aria-label="Final grade formula">
+  <rect width="640" height="280" fill="#f8fafc"/>
+  <text x="320" y="28" text-anchor="middle" font-family="Segoe UI, sans-serif" font-size="16" font-weight="600" fill="#0f172a">Weighted Final Grade Calculation</text>
+  <rect x="40" y="50" width="120" height="52" rx="6" fill="#dbeafe" stroke="#2563eb"/>
+  <text x="100" y="72" text-anchor="middle" font-family="Segoe UI, sans-serif" font-size="12" font-weight="600" fill="#1e40af">Attendance</text>
+  <text x="100" y="90" text-anchor="middle" font-family="Segoe UI, sans-serif" font-size="14" font-weight="700" fill="#1e3a8a">10%</text>
+  <rect x="180" y="50" width="120" height="52" rx="6" fill="#dcfce7" stroke="#16a34a"/>
+  <text x="240" y="72" text-anchor="middle" font-family="Segoe UI, sans-serif" font-size="12" font-weight="600" fill="#166534">Behavior</text>
+  <text x="240" y="90" text-anchor="middle" font-family="Segoe UI, sans-serif" font-size="14" font-weight="700" fill="#14532d">10%</text>
+  <rect x="320" y="50" width="120" height="52" rx="6" fill="#fef3c7" stroke="#d97706"/>
+  <text x="380" y="72" text-anchor="middle" font-family="Segoe UI, sans-serif" font-size="12" font-weight="600" fill="#92400e">5 Quizzes</text>
+  <text x="380" y="90" text-anchor="middle" font-family="Segoe UI, sans-serif" font-size="14" font-weight="700" fill="#78350f">25%</text>
+  <rect x="460" y="50" width="140" height="52" rx="6" fill="#f3e8ff" stroke="#9333ea"/>
+  <text x="530" y="72" text-anchor="middle" font-family="Segoe UI, sans-serif" font-size="12" font-weight="600" fill="#6b21a8">Midterm + Final</text>
+  <text x="530" y="90" text-anchor="middle" font-family="Segoe UI, sans-serif" font-size="14" font-weight="700" fill="#581c87">55%</text>
+  <text x="320" y="140" text-anchor="middle" font-family="Segoe UI, sans-serif" font-size="13" fill="#475569">Quizzes: 5% each | Midterm project: 15% | Final exam: 40%</text>
+  <rect x="120" y="170" width="400" height="80" rx="8" fill="#fff" stroke="#cbd5e1" stroke-width="1.5"/>
+  <text x="320" y="198" text-anchor="middle" font-family="Segoe UI, sans-serif" font-size="12" font-weight="600" fill="#0f172a">Automatic outcomes</text>
+  <text x="320" y="220" text-anchor="middle" font-family="Segoe UI, sans-serif" font-size="11" fill="#334155">Letter grade (A-F) | Pass / Fail | Class rank per classroom</text>
+  <text x="320" y="238" text-anchor="middle" font-family="Segoe UI, sans-serif" font-size="11" fill="#64748b">Recomputed when attendance, behavior, or scores change</text>
+</svg>

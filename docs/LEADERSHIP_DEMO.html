@@ -1,0 +1,396 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>FWIS Leadership Demo</title>
+  <style>
+    :root {
+      --bg: #0f172a;
+      --surface: #1e293b;
+      --text: #f8fafc;
+      --muted: #94a3b8;
+      --accent: #38bdf8;
+      --accent-dim: #0ea5e9;
+      --border: #334155;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { height: 100%; overflow: hidden; font-family: "Segoe UI", system-ui, sans-serif; background: var(--bg); color: var(--text); }
+    .deck { height: 100%; position: relative; }
+    .slide {
+      display: none;
+      height: 100%;
+      padding: 48px 64px 96px;
+      overflow-y: auto;
+      animation: fadeIn 0.25s ease;
+    }
+    .slide.active { display: flex; flex-direction: column; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+    .slide-title { font-size: 2rem; font-weight: 700; margin-bottom: 8px; line-height: 1.2; }
+    .slide-subtitle { font-size: 1.125rem; color: var(--muted); margin-bottom: 28px; max-width: 820px; line-height: 1.55; }
+    .slide h3 { font-size: 0.875rem; font-weight: 600; color: var(--accent); margin: 18px 0 8px; text-transform: uppercase; letter-spacing: 0.06em; }
+    .slide ul, .slide ol { margin-left: 1.25rem; line-height: 1.7; color: #e2e8f0; }
+    .slide li { margin-bottom: 6px; }
+    .slide p { line-height: 1.65; color: #e2e8f0; max-width: 820px; }
+    .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 28px; align-items: start; }
+    .three-col { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-top: 12px; }
+    .four-col { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-top: 12px; }
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 14px 16px;
+    }
+    .card strong { display: block; margin-bottom: 6px; color: var(--text); font-size: 0.9375rem; }
+    .card span, .card p { font-size: 0.8125rem; color: var(--muted); line-height: 1.5; }
+    .title-slide { justify-content: center; align-items: center; text-align: center; }
+    .title-slide .slide-title { font-size: 2.5rem; }
+    .title-slide .slide-subtitle { font-size: 1.125rem; margin-left: auto; margin-right: auto; }
+    .badge-row { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; margin-top: 20px; }
+    .badge { background: var(--surface); border: 1px solid var(--border); padding: 6px 14px; border-radius: 999px; font-size: 0.8125rem; color: var(--muted); }
+    table { width: 100%; border-collapse: collapse; font-size: 0.875rem; margin-top: 8px; }
+    th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--border); vertical-align: top; }
+    th { color: var(--muted); font-weight: 600; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; }
+    td { color: #e2e8f0; }
+    code { background: var(--surface); padding: 2px 6px; border-radius: 4px; font-size: 0.8125rem; color: var(--accent); }
+    .mermaid-wrap {
+      margin-top: 12px;
+      background: #f8fafc;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 16px;
+      overflow-x: auto;
+      flex: 1;
+      min-height: 280px;
+      color: #0f172a;
+    }
+    .mermaid-wrap .mermaid { display: flex; justify-content: center; }
+    /* Force readable text in Mermaid SVG (subgraph titles, node labels, edges) */
+    .mermaid-wrap svg .nodeLabel,
+    .mermaid-wrap svg .nodeLabel p,
+    .mermaid-wrap svg .cluster-label,
+    .mermaid-wrap svg .cluster-label span,
+    .mermaid-wrap svg .edgeLabel,
+    .mermaid-wrap svg .edgeLabel p,
+    .mermaid-wrap svg .label text,
+    .mermaid-wrap svg text {
+      fill: #0f172a !important;
+      color: #0f172a !important;
+    }
+    .mermaid-wrap svg .edgeLabel .labelBkg {
+      fill: #ffffff !important;
+      stroke: #cbd5e1 !important;
+    }
+    .step-label {
+      display: inline-block;
+      background: var(--accent-dim);
+      color: #0f172a;
+      font-size: 0.6875rem;
+      font-weight: 700;
+      padding: 2px 8px;
+      border-radius: 4px;
+      margin-right: 6px;
+      vertical-align: middle;
+    }
+    .nav-bar {
+      position: fixed; bottom: 0; left: 0; right: 0;
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 12px 24px;
+      background: rgba(15, 23, 42, 0.95);
+      border-top: 1px solid var(--border);
+      backdrop-filter: blur(8px);
+      z-index: 100;
+    }
+    .nav-bar button {
+      background: var(--surface);
+      color: var(--text);
+      border: 1px solid var(--border);
+      padding: 10px 20px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 0.9375rem;
+      min-width: 110px;
+    }
+    .nav-bar button:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+    .nav-bar button:disabled { opacity: 0.35; cursor: not-allowed; }
+    .nav-bar button.primary { background: var(--accent-dim); border-color: var(--accent-dim); color: #0f172a; font-weight: 600; }
+    .progress { flex: 1; text-align: center; color: var(--muted); font-size: 0.875rem; }
+    .dots { display: flex; gap: 6px; justify-content: center; margin-top: 4px; }
+    .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--border); cursor: pointer; border: none; padding: 0; }
+    .dot.active { background: var(--accent); }
+    @media (max-width: 900px) {
+      .slide { padding: 32px 24px 96px; }
+      .two-col, .three-col, .four-col { grid-template-columns: 1fr; }
+      .slide-title { font-size: 1.5rem; }
+    }
+  </style>
+</head>
+<body>
+  <div class="deck" id="deck">
+
+    <section class="slide active title-slide" data-slide="1">
+      <p style="color: var(--accent); font-size: 0.875rem; letter-spacing: 0.1em; text-transform: uppercase; margin-bottom: 12px;">Leadership Demo</p>
+      <h1 class="slide-title">FWIS — Weekend Islamic School<br/>Management System</h1>
+      <p class="slide-subtitle">Features and school data hierarchy: how setup, enrollment, and Sunday operations connect from campus to final grades.</p>
+      <div class="badge-row">
+        <span class="badge">School → Year → Calendar</span>
+        <span class="badge">Student → Enrollment</span>
+        <span class="badge">Attendance · Behavior · Assessments</span>
+        <span class="badge">Role-based access</span>
+      </div>
+    </section>
+
+    <section class="slide" data-slide="2">
+      <h2 class="slide-title">Features</h2>
+      <p class="slide-subtitle">What the system does today — grouped by how schools actually run.</p>
+      <div class="four-col">
+        <div class="card"><strong>School setup</strong><span>Schools, academic years, Sunday calendar, grades (1–6 Boys/Girls), teachers</span></div>
+        <div class="card"><strong>Students</strong><span>Global student records — one person, many enrollments across years</span></div>
+        <div class="card"><strong>Enrollments</strong><span>Link student to school, year, grade, and teacher for the season</span></div>
+        <div class="card"><strong>Attendance</strong><span>Present / Absent / Tardy per Sunday; consolidate matrix for admins</span></div>
+        <div class="card"><strong>Behavior</strong><span>Nine levels adjust behavior score (starts at 100) on each enrollment</span></div>
+        <div class="card"><strong>Assessments</strong><span>Quiz 1–5, midterm project, final exam in a classroom grid</span></div>
+        <div class="card"><strong>Final grades</strong><span>Weighted formula → letter grade, pass/fail, class rank</span></div>
+        <div class="card"><strong>Access control</strong><span>Super Admin, School Admin, Teacher — scoped by role</span></div>
+      </div>
+    </section>
+
+    <section class="slide" data-slide="3">
+      <h2 class="slide-title">School data hierarchy</h2>
+      <p class="slide-subtitle">Read top to bottom: configure the campus → enroll students → teachers record Sunday data.</p>
+      <div class="mermaid-wrap">
+        <pre class="mermaid">
+flowchart TB
+  subgraph setup["1 · School setup — admin, once per year"]
+    School["School"]
+    Year["Academic Year"]
+    Calendar["Sunday Calendar"]
+    Grade["Grade / Classroom"]
+    Teacher["Teacher"]
+    School --> Year
+    Year --> Calendar
+    School --> Grade
+    School --> Teacher
+    Teacher --> Grade
+  end
+  subgraph people["2 · Students — admin"]
+    Student["Student\n(global record)"]
+    Enroll["Enrollment\nyear + grade + teacher"]
+    Student --> Enroll
+    School --> Enroll
+    Year --> Enroll
+    Grade --> Enroll
+    Teacher --> Enroll
+  end
+  subgraph sunday["3 · Sunday operations — teacher"]
+    Attend["Attendance\nP / A / T"]
+    Behavior["Behavior\n9 levels"]
+    Assess["Assessments\nQuizzes & exams"]
+    Final["Final Grade\nweighted %"]
+    Enroll --> Attend
+    Enroll --> Behavior
+    Enroll --> Assess
+    Calendar --> Attend
+    Attend --> Final
+    Behavior --> Final
+    Assess --> Final
+  end
+        </pre>
+      </div>
+    </section>
+
+    <section class="slide" data-slide="4">
+      <h2 class="slide-title">Setup layer</h2>
+      <p class="slide-subtitle"><span class="step-label">1</span> Everything under a school is scoped to one academic year at a time.</p>
+      <table>
+        <tr><th>Entity</th><th>Relationship</th><th>Example</th></tr>
+        <tr><td><strong>School</strong></td><td>Root of all data</td><td>Houston, Chicago, Dallas</td></tr>
+        <tr><td><strong>Academic Year</strong></td><td>Belongs to one school</td><td>2025–2026</td></tr>
+        <tr><td><strong>Calendar</strong></td><td>Belongs to academic year — one row per Sunday</td><td>Instructional, Quiz 1–5, Holiday, Final</td></tr>
+        <tr><td><strong>Grade / Classroom</strong></td><td>Belongs to school — 12 per campus</td><td>Grade 1 Boys</td></tr>
+        <tr><td><strong>Teacher</strong></td><td>Belongs to school; assigned to one grade</td><td>Grade 1 Boys teacher</td></tr>
+      </table>
+      <p style="margin-top: 16px;">The calendar defines which Sundays count toward attendance % and which session type applies (quiz day, holiday, etc.).</p>
+    </section>
+
+    <section class="slide" data-slide="5">
+      <h2 class="slide-title">Student &amp; enrollment</h2>
+      <p class="slide-subtitle"><span class="step-label">2</span> Students are global; enrollments connect them to a specific school season and grade.</p>
+      <div class="two-col">
+        <div>
+          <div class="card" style="margin-bottom: 12px;">
+            <strong>Student</strong>
+            <p>Permanent record — name, gender, parent contact. Created once, never duplicated.</p>
+          </div>
+          <div class="card">
+            <strong>Enrollment</strong>
+            <p>Joins student + school + academic year + grade + teacher. One student can have many enrollments (new year, transfer, promotion).</p>
+          </div>
+        </div>
+        <div class="mermaid-wrap" style="min-height: 200px;">
+          <pre class="mermaid">
+flowchart LR
+  Student["Student"] --> Enroll["Enrollment"]
+  School["School"] --> Enroll
+  Year["Academic Year"] --> Enroll
+  Grade["Grade"] --> Enroll
+  Teacher["Teacher"] --> Enroll
+          </pre>
+        </div>
+      </div>
+    </section>
+
+    <section class="slide" data-slide="6">
+      <h2 class="slide-title">Attendance, behavior &amp; assessments</h2>
+      <p class="slide-subtitle"><span class="step-label">3</span> All Sunday data attaches to the enrollment; calendar days anchor attendance.</p>
+      <div class="mermaid-wrap" style="min-height: 220px;">
+        <pre class="mermaid">
+flowchart TB
+  Enroll["Enrollment"]
+  Cal["Calendar day\nSunday + session type"]
+  Enroll --> Attend["Attendance"]
+  Cal --> Attend
+  Enroll --> Beh["Behavior → score"]
+  Enroll --> Scores["Assessment scores"]
+  Attend --> FG["Final grade"]
+  Beh --> FG
+  Scores --> FG
+        </pre>
+      </div>
+      <table style="margin-top: 12px;">
+        <tr><th>Module</th><th>What is recorded</th><th>Weight in final grade</th></tr>
+        <tr><td><strong>Attendance</strong></td><td>Present / Absent / Tardy per Sunday</td><td>10%</td></tr>
+        <tr><td><strong>Behavior</strong></td><td>9 levels → enrollment behavior score</td><td>10%</td></tr>
+        <tr><td><strong>Assessments</strong></td><td>Quiz 1–5, midterm project, final exam</td><td>25% + 55%</td></tr>
+      </table>
+    </section>
+
+    <section class="slide" data-slide="7">
+      <h2 class="slide-title">Who uses what</h2>
+      <p class="slide-subtitle">Roles map to the three layers of the hierarchy.</p>
+      <table>
+        <tr><th>Role</th><th>Setup (school → calendar)</th><th>Students &amp; enrollments</th><th>Sunday entry</th></tr>
+        <tr><td><strong>Super Admin</strong></td><td>All schools</td><td>All schools</td><td>Oversight, consolidate attendance</td></tr>
+        <tr><td><strong>School Admin</strong></td><td>Their school</td><td>Their school</td><td>All grades — attendance matrix, assessments</td></tr>
+        <tr><td><strong>Teacher</strong></td><td>—</td><td>—</td><td>Assigned grade only</td></tr>
+      </table>
+      <h3>Sidebar groups in the app</h3>
+      <div class="three-col">
+        <div class="card"><strong>Classroom</strong><span>Attendance, Consolidate Attendance, Assessments</span></div>
+        <div class="card"><strong>Setup</strong><span>Schools, Academic Years, Calendar, Grades, Teachers</span></div>
+        <div class="card"><strong>Students</strong><span>Students, Enrollments</span></div>
+      </div>
+    </section>
+
+    <section class="slide title-slide" data-slide="8">
+      <h2 class="slide-title">Live demo</h2>
+      <p class="slide-subtitle">Run <code>npm run setup</code> once, then walk through the hierarchy in 10 minutes.</p>
+      <table style="max-width: 720px; margin: 0 auto;">
+        <tr><th>Role</th><th>Email</th><th>Password</th></tr>
+        <tr><td>Super Admin</td><td><code>superadmin@fwis.org</code></td><td><code>FwisAdmin786!</code></td></tr>
+        <tr><td>School Admin</td><td><code>admin.houston@fwis.org</code></td><td><code>FwisAdmin786!</code></td></tr>
+        <tr><td>Teacher</td><td><code>grade1.boys.houston@fwis.org</code></td><td><code>FwisTeacher786!</code></td></tr>
+      </table>
+      <ol style="margin-top: 24px; max-width: 560px; text-align: left; margin-left: auto; margin-right: auto;">
+        <li>School Admin — academic year + calendar <em>(setup)</em></li>
+        <li>School Admin — student + enrollment <em>(people)</em></li>
+        <li>Teacher — attendance + behavior on a Sunday <em>(operations)</em></li>
+        <li>Teacher — assessment scores → final grade preview</li>
+      </ol>
+    </section>
+
+  </div>
+
+  <nav class="nav-bar" aria-label="Slide navigation">
+    <button type="button" id="prevBtn" disabled aria-label="Previous slide">Previous</button>
+    <div class="progress">
+      <span id="counter">1 / 8</span>
+      <div class="dots" id="dots"></div>
+    </div>
+    <button type="button" id="nextBtn" class="primary" aria-label="Next slide">Next</button>
+  </nav>
+
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+  <script>
+    mermaid.initialize({
+      startOnLoad: false,
+      theme: "base",
+      themeVariables: {
+        darkMode: false,
+        background: "#f8fafc",
+        mainBkg: "#ffffff",
+        primaryColor: "#dbeafe",
+        primaryTextColor: "#0f172a",
+        primaryBorderColor: "#1d4ed8",
+        secondaryColor: "#dcfce7",
+        secondaryTextColor: "#14532d",
+        tertiaryColor: "#fef3c7",
+        tertiaryTextColor: "#78350f",
+        lineColor: "#334155",
+        textColor: "#0f172a",
+        nodeTextColor: "#0f172a",
+        nodeBorder: "#1e40af",
+        clusterBkg: "#e2e8f0",
+        clusterBorder: "#475569",
+        titleColor: "#0f172a",
+        edgeLabelBackground: "#ffffff",
+        fontFamily: "Segoe UI, system-ui, sans-serif",
+        fontSize: "15px",
+      },
+      flowchart: { curve: "basis", padding: 12, htmlLabels: true },
+    });
+
+    const slides = Array.from(document.querySelectorAll(".slide"));
+    const total = slides.length;
+    let current = 0;
+    const prevBtn = document.getElementById("prevBtn");
+    const nextBtn = document.getElementById("nextBtn");
+    const counter = document.getElementById("counter");
+    const dotsEl = document.getElementById("dots");
+    const rendered = new Set();
+
+    slides.forEach((_, i) => {
+      const dot = document.createElement("button");
+      dot.className = "dot" + (i === 0 ? " active" : "");
+      dot.type = "button";
+      dot.setAttribute("aria-label", "Go to slide " + (i + 1));
+      dot.addEventListener("click", () => goTo(i));
+      dotsEl.appendChild(dot);
+    });
+
+    async function renderMermaidOnSlide(index) {
+      if (rendered.has(index)) return;
+      const slide = slides[index];
+      const nodes = slide.querySelectorAll(".mermaid");
+      if (nodes.length === 0) return;
+      await mermaid.run({ nodes: Array.from(nodes) });
+      rendered.add(index);
+    }
+
+    function goTo(index) {
+      slides[current].classList.remove("active");
+      current = Math.max(0, Math.min(total - 1, index));
+      slides[current].classList.add("active");
+      slides[current].scrollTop = 0;
+      prevBtn.disabled = current === 0;
+      nextBtn.disabled = current === total - 1;
+      nextBtn.textContent = current === total - 1 ? "End" : "Next";
+      counter.textContent = (current + 1) + " / " + total;
+      dotsEl.querySelectorAll(".dot").forEach((d, i) => d.classList.toggle("active", i === current));
+      renderMermaidOnSlide(current);
+    }
+
+    prevBtn.addEventListener("click", () => goTo(current - 1));
+    nextBtn.addEventListener("click", () => { if (current < total - 1) goTo(current + 1); });
+
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "ArrowRight" || e.key === "PageDown" || e.key === " ") { e.preventDefault(); if (current < total - 1) goTo(current + 1); }
+      if (e.key === "ArrowLeft" || e.key === "PageUp") { e.preventDefault(); if (current > 0) goTo(current - 1); }
+      if (e.key === "Home") goTo(0);
+      if (e.key === "End") goTo(total - 1);
+    });
+
+    goTo(0);
+  </script>
+</body>
+</html>
