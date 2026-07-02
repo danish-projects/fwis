@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { listPaginationSchema } from "@/lib/validations/pagination";
+import { listPaginationSchema, emptyToUndefined } from "@/lib/validations/pagination";
 
 export const enrollmentSchema = z.object({
   studentId: z.string().uuid("Select a student"),
@@ -58,10 +58,12 @@ export const assessmentScoreSchema = z.object({
 export type AssessmentScoreInput = z.infer<typeof assessmentScoreSchema>;
 
 export const enrollmentListSchema = listPaginationSchema.extend({
-  schoolId: z.string().uuid().optional(),
-  academicYearId: z.string().uuid().optional(),
-  classroomId: z.string().uuid().optional(),
-  status: z.enum(["ACTIVE", "WITHDRAWN", "GRADUATED", "PROMOTED"]).optional(),
+  schoolId: emptyToUndefined(z.string().uuid().optional()),
+  academicYearId: emptyToUndefined(z.string().uuid().optional()),
+  classroomId: emptyToUndefined(z.string().uuid().optional()),
+  status: emptyToUndefined(
+    z.enum(["ACTIVE", "WITHDRAWN", "GRADUATED", "PROMOTED"]).optional()
+  ),
 });
 
 export type EnrollmentListInput = z.infer<typeof enrollmentListSchema>;

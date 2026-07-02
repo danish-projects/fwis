@@ -4,6 +4,10 @@ import type {
   GenderCode,
   SessionTypeCode,
 } from "../../prisma/lookup-data";
+import {
+  isValidStudentNumber,
+  parseStudentNumber,
+} from "../../src/lib/students/student-number";
 
 const GRADE_ALIASES: Record<string, number> = {
   "1": 1,
@@ -111,6 +115,35 @@ export function studentKey(
   section: "Boys" | "Girls"
 ) {
   return `${firstName.trim().toLowerCase()}|${lastName.trim().toLowerCase()}|${grade}|${section}`;
+}
+
+export function normalizeStudentId(value: string, label = "student_id"): string {
+  const trimmed = value.trim().toUpperCase();
+  if (!isValidStudentNumber(trimmed)) {
+    throw new Error(
+      `Invalid ${label} "${value}". Expected format HOU-B40 (3-letter city code, B or G, sequence).`
+    );
+  }
+  return trimmed;
+}
+
+export function assertStudentIdMatchesSchool(
+  studentId: string,
+  schoolCityCode: string,
+  gender: GenderCode
+): void {
+  const parsed = parseStudentNumber(studentId);
+  if (parsed.cityCode !== schoolCityCode.toUpperCase()) {
+    throw new Error(
+      `student_id "${studentId}" city code ${parsed.cityCode} does not match school city code ${schoolCityCode}.`
+    );
+  }
+  const expected = gender === "FEMALE" ? "G" : "B";
+  if (parsed.genderPrefix !== expected) {
+    throw new Error(
+      `student_id "${studentId}" gender prefix ${parsed.genderPrefix} does not match student gender ${gender}.`
+    );
+  }
 }
 
 export function classroomLabel(grade: number, section: "Boys" | "Girls") {

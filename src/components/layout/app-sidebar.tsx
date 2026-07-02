@@ -6,6 +6,7 @@ import {
   Calendar,
   CalendarRange,
   ClipboardCheck,
+  Download,
   DoorOpen,
   FileText,
   GraduationCap,
@@ -45,6 +46,7 @@ const ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
   ScrollText,
   Shield,
   ClipboardCheck,
+  Download,
   Table2,
 };
 

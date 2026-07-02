@@ -27,6 +27,16 @@ export default async function ReportsPage() {
         </Card>
         <Card>
           <CardHeader>
+            <CardTitle>Data Backup</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <Button asChild>
+              <Link href="/backup">Export Excel Backup</Link>
+            </Button>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader>
             <CardTitle>Student Report Card</CardTitle>
           </CardHeader>
           <CardContent>

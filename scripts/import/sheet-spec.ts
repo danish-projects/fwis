@@ -1,86 +1,29 @@
 /** Shared column definitions for the FWIS school data import template. */
 
-export const SHEET_NAMES = {
-  instructions: "Instructions",
-  schoolSetup: "School_Setup",
-  teachers: "Teachers",
-  students: "Students",
-  attendance: "Attendance",
-  assessments: "Assessments",
-  calendarOptional: "Calendar_Optional",
-} as const;
+export {
+  ASSESSMENT_COLUMN_BY_TYPE,
+  ASSESSMENT_COLUMNS,
+  ATTENDANCE_COLUMNS,
+  CALENDAR_COLUMNS,
+  SCHOOL_SETUP_COLUMNS,
+  SHEET_NAMES,
+  STUDENT_COLUMNS,
+  TEACHER_COLUMNS,
+  type SheetName,
+} from "../../src/lib/import/sheet-spec";
 
-export type SheetName = (typeof SHEET_NAMES)[keyof typeof SHEET_NAMES];
-
-export const SCHOOL_SETUP_COLUMNS = [
-  "school_name",
-  "city",
-  "state",
-  "academic_year",
-  "year_start_date",
-  "year_end_date",
-] as const;
-
-export const TEACHER_COLUMNS = [
-  "school_city",
-  "school_state",
-  "first_name",
-  "last_name",
-  "email",
-  "phone",
-  "grade",
-  "section",
-] as const;
-
-export const STUDENT_COLUMNS = [
-  "school_city",
-  "school_state",
-  "academic_year",
-  "first_name",
-  "last_name",
-  "gender",
-  "grade",
-  "section",
-  "teacher_email",
-  "parent_name",
-  "parent_phone",
-  "parent_email",
-  "enrollment_date",
-] as const;
-
-export const ATTENDANCE_COLUMNS = [
-  "school_city",
-  "school_state",
-  "academic_year",
+export const ATTENDANCE_LEGACY_COLUMNS = [
   "student_first_name",
   "student_last_name",
   "grade",
   "section",
-  "date",
-  "status",
 ] as const;
 
-export const ASSESSMENT_COLUMNS = [
-  "school_city",
-  "school_state",
-  "academic_year",
+export const ASSESSMENT_LEGACY_COLUMNS = [
   "student_first_name",
   "student_last_name",
   "grade",
   "section",
-  "quiz_1",
-  "quiz_2",
-  "quiz_3",
-  "quiz_4",
-  "quiz_5",
-  "midterm_project",
-  "final_exam",
-] as const;
-
-export const CALENDAR_COLUMNS = [
-  "date",
-  "session_type",
-  "sunday_number",
 ] as const;
 
 export const INSTRUCTIONS_LINES = [
@@ -102,13 +45,18 @@ export const INSTRUCTIONS_LINES = [
   "  • One workbook = one school + one academic year (see School_Setup)",
   "  • school_city + school_state on every sheet must match School_Setup",
   "  • academic_year on Students/Attendance/Assessments must match School_Setup",
-  "  • grade: 1–6 or Grade 1 … Grade 6 on Teachers, Students, Attendance, Assessments",
+  "  • student_id: HOU-B1 (city code + B/G + number). Assign on Students first, then copy to Attendance/Assessments",
+  "  • student_id on Students is optional — leave blank to auto-assign on import",
+  "  • grade: 1–6 or Grade 1 … Grade 6 on Teachers and Students",
   "  • section: Boys or Girls (exact capitalization recommended)",
-  "  • Attendance/Assessments: grade + section must match the Students row for that child",
+  "  • Attendance/Assessments: use student_id from the Students sheet (must match exactly)",
   "  • gender: MALE or FEMALE (MALE→Boys, FEMALE→Girls)",
   "  • teacher_email (Students) must match email on Teachers sheet exactly",
   "  • attendance date: YYYY-MM-DD, must be a Sunday in the academic year",
   "  • status: Present, Absent, or Tardy",
+  "  • Calendar_Optional: mark HOLIDAY, QUIZ_1–QUIZ_5, FINAL_EXAM, etc. per Sunday",
+  "  • Do not record attendance on HOLIDAY, PARENT_MEETING, or GRADUATION days",
+  "  • Quiz and final exam days on the calendar require matching scores on Assessments",
   "  • assessment scores: 0–100; leave blank if not taken",
   "  • See docs/DATA_IMPORT.md for foreign keys and exact match values",
   "  • Delete all example rows before importing real data",
@@ -153,6 +101,7 @@ export const EXAMPLE_STUDENTS = [
     school_city: "Houston",
     school_state: "TX",
     academic_year: "2024-2025",
+    student_id: "HOU-B1",
     first_name: "Ahmed",
     last_name: "Khan",
     gender: "MALE",
@@ -168,6 +117,7 @@ export const EXAMPLE_STUDENTS = [
     school_city: "Houston",
     school_state: "TX",
     academic_year: "2024-2025",
+    student_id: "HOU-G1",
     first_name: "Aisha",
     last_name: "Ali",
     gender: "FEMALE",
@@ -186,10 +136,7 @@ export const EXAMPLE_ATTENDANCE = [
     school_city: "Houston",
     school_state: "TX",
     academic_year: "2024-2025",
-    student_first_name: "Ahmed",
-    student_last_name: "Khan",
-    grade: "1",
-    section: "Boys",
+    student_id: "HOU-B1",
     date: "2024-09-08",
     status: "Present",
   },
@@ -197,10 +144,7 @@ export const EXAMPLE_ATTENDANCE = [
     school_city: "Houston",
     school_state: "TX",
     academic_year: "2024-2025",
-    student_first_name: "Ahmed",
-    student_last_name: "Khan",
-    grade: "1",
-    section: "Boys",
+    student_id: "HOU-B1",
     date: "2024-09-15",
     status: "Present",
   },
@@ -208,10 +152,7 @@ export const EXAMPLE_ATTENDANCE = [
     school_city: "Houston",
     school_state: "TX",
     academic_year: "2024-2025",
-    student_first_name: "Aisha",
-    student_last_name: "Ali",
-    grade: "1",
-    section: "Girls",
+    student_id: "HOU-G1",
     date: "2024-09-08",
     status: "Absent",
   },
@@ -222,10 +163,7 @@ export const EXAMPLE_ASSESSMENTS = [
     school_city: "Houston",
     school_state: "TX",
     academic_year: "2024-2025",
-    student_first_name: "Ahmed",
-    student_last_name: "Khan",
-    grade: "1",
-    section: "Boys",
+    student_id: "HOU-B1",
     quiz_1: "92",
     quiz_2: "88",
     quiz_3: "90",
@@ -238,10 +176,7 @@ export const EXAMPLE_ASSESSMENTS = [
     school_city: "Houston",
     school_state: "TX",
     academic_year: "2024-2025",
-    student_first_name: "Aisha",
-    student_last_name: "Ali",
-    grade: "1",
-    section: "Girls",
+    student_id: "HOU-G1",
     quiz_1: "95",
     quiz_2: "94",
     quiz_3: "96",

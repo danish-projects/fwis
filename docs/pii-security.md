@@ -54,7 +54,7 @@ There is no built-in multi-key rotation yet — plan maintenance windows for key
 ## In transit
 
 - Browser traffic: HTTPS + HSTS (production)
-- Database: TLS to Supabase (`sslmode=require`)
+- Database: TLS to Supabase (strict cert verification in production; relaxed in local dev)
 - Supabase Auth / Resend: HTTPS
 
 ## Access control

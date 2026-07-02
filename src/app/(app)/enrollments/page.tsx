@@ -133,9 +133,16 @@ export default async function EnrollmentsPage({ searchParams }: PageProps) {
                       </Badge>
                     </td>
                     <td className="py-3">
-                      <Button asChild variant="ghost" size="sm">
-                        <Link href={`/enrollments/${e.id}`}>View</Link>
-                      </Button>
+                      <div className="flex gap-1">
+                        <Button asChild variant="ghost" size="sm">
+                          <Link href={`/enrollments/${e.id}`}>View</Link>
+                        </Button>
+                        <Button asChild variant="ghost" size="sm">
+                          <Link href={`/students/${e.studentId}/profile?year=${e.academicYearId}`}>
+                            Profile
+                          </Link>
+                        </Button>
+                      </div>
                     </td>
                   </tr>
                 ))}

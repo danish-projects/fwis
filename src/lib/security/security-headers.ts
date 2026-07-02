@@ -1,4 +1,4 @@
-import { isProduction } from "@/lib/security/env";
+import { isProduction } from "./env";
 
 export const SECURITY_HEADERS: { key: string; value: string }[] = [
   {

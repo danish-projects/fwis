@@ -109,9 +109,9 @@ Teachers only need `school_city` and `school_state` (no `academic_year` column).
 
 - [ ] **School_Setup**: `school_name`, `city`, `state`, `academic_year`, `year_start_date`, `year_end_date`
 - [ ] **Teachers**: all teachers for this school; each assigned to one `grade` + `section`
-- [ ] **Students**: every enrolled student; `teacher_email` must match a row on Teachers
-- [ ] **Attendance**: every Sunday record; student name + grade + section must match Students
-- [ ] **Assessments**: scores per student; same name + grade + section as Students
+- [ ] **Students**: every enrolled student; assign `student_id` (e.g. `HOU-B1`) then copy to Attendance/Assessments
+- [ ] **Attendance**: every Sunday record; `student_id` must match the Students sheet
+- [ ] **Assessments**: scores per student; same `student_id` as Students
 
 ### Do's and Don'ts
 
@@ -122,11 +122,13 @@ Teachers only need `school_city` and `school_state` (no `academic_year` column).
 | Use one Google Sheet per school per academic year | e.g. Houston 2024-2025 only |
 | Keep tab names exactly as provided | `School_Setup`, `Teachers`, `Students`, `Attendance`, `Assessments`, `Calendar_Optional` |
 | Keep row 1 as column headers | Do not delete or rename header cells |
-| Use grade `1`–`6` (or `Grade 1`–`Grade 6`) | Same value on Students, Attendance, and Assessments for each child |
+| Use grade `1`–`6` (or `Grade 1`–`Grade 6`) | On Teachers and Students |
 | Use section `Boys` or `Girls` | `MALE` students → Boys; `FEMALE` students → Girls |
 | Use dates as `YYYY-MM-DD` | e.g. `2024-09-08` (must be a **Sunday** for attendance) |
 | Match `teacher_email` on Students to `email` on Teachers | Exact same address |
 | Copy `school_city`, `school_state`, `academic_year` on every row | Must match School_Setup |
+| Use `student_id` on Students, Attendance, and Assessments | Format `HOU-B1` (city code + B/G + number); copy from Students to other tabs |
+| Leave `student_id` blank on Students to auto-assign on import | Then use legacy name columns on Attendance/Assessments, or pre-fill IDs on Students first |
 
 **Don't**
 
@@ -138,7 +140,8 @@ Teachers only need `school_city` and `school_state` (no `academic_year` column).
 | Mix multiple schools in one file | Import is scoped to one city + state |
 | Use grade `7`, `K`, or `Pre-K` | Only grades 1–6 are supported |
 | Put attendance on a non-Sunday date | Calendar lookup will fail |
-| Use different grade/section for the same student across tabs | Attendance and assessments won't link |
+| Use different `student_id` for the same student across tabs | Attendance and assessments won't link |
+| Use different grade/section for the same student across tabs | Legacy name matching won't link |
 
 ### Quick value reference
 
@@ -152,13 +155,17 @@ Teachers only need `school_city` and `school_state` (no `academic_year` column).
 
 **Assessment scores:** numbers `0`–`100`, or leave blank if not taken
 
-**Student matching** — Attendance and Assessments must use the same student as the Students row:
+**Student ID** (Students, Attendance, Assessments): `HOU-B1`, `HOU-G2`, etc. — 3-letter city code, `B` (boys) or `G` (girls), sequence number. Assign on the **Students** sheet first, then copy the same value to Attendance and Assessments.
+
+**Student matching** — Attendance and Assessments link to Students by `student_id`:
 
 ```
-school_city + school_state + academic_year + name + grade + section
+school_city + school_state + academic_year + student_id
 ```
 
-Example: Students has `Ahmed`, `Khan`, `1`, `Boys` → every Attendance/Assessments row for Ahmed uses `student_first_name=Ahmed`, `student_last_name=Khan`, `grade=1`, `section=Boys`.
+Example: Students has `student_id=HOU-B1` for Ahmed → every Attendance/Assessments row for Ahmed uses `student_id=HOU-B1`.
+
+Older workbooks without `student_id` still work using `student_first_name`, `student_last_name`, `grade`, and `section` on Attendance/Assessments.
 
 ---
 
@@ -185,6 +192,8 @@ Dry run will:
 
 - Validate sheet names and column headers
 - Check that `school_city`, `school_state`, and `academic_year` match across tabs
+- Validate `student_id` on Students, Attendance, and Assessments (format, duplicates, and cross-sheet references)
+- Validate calendar days: no attendance on holidays/non-instructional days; quiz and final exam days require matching assessment scores
 - Print row counts from the file
 - Show **existing database records** for that school + year (if any)
 - Make **no changes** to the database
@@ -312,6 +321,7 @@ Edit Google Sheet → Download .xlsx → dry-run → import (confirm delete if p
 | school_city | Houston | Yes |
 | school_state | TX | Yes |
 | academic_year | 2024-2025 | Yes |
+| student_id | HOU-B1 | No — auto-assigned if blank; required on Attendance/Assessments |
 | first_name | Ahmed | Yes |
 | last_name | Khan | Yes |
 | gender | MALE | Yes |
@@ -330,10 +340,7 @@ Edit Google Sheet → Download .xlsx → dry-run → import (confirm delete if p
 | school_city | Houston | Yes |
 | school_state | TX | Yes |
 | academic_year | 2024-2025 | Yes |
-| student_first_name | Ahmed | Yes — match Students |
-| student_last_name | Khan | Yes |
-| grade | 1 | Yes — match Students |
-| section | Boys | Yes |
+| student_id | HOU-B1 | Yes — match Students |
 | date | 2024-09-08 | Yes — Sunday, `YYYY-MM-DD` |
 | status | Present | Yes |
 
@@ -344,23 +351,29 @@ Edit Google Sheet → Download .xlsx → dry-run → import (confirm delete if p
 | school_city | Houston | Yes |
 | school_state | TX | Yes |
 | academic_year | 2024-2025 | Yes |
-| student_first_name | Ahmed | Yes |
-| student_last_name | Khan | Yes |
-| grade | 1 | Yes |
-| section | Boys | Yes |
+| student_id | HOU-B1 | Yes — match Students |
 | quiz_1 … quiz_5 | 92 | No (0–100) |
 | midterm_project | 87 | No |
 | final_exam | 93 | No |
 
 ### Calendar_Optional
 
-Leave empty unless you need custom session types. Otherwise Sundays are auto-generated.
+Leave empty unless you need custom session types. Otherwise Sundays are auto-generated from `year_start_date` and `year_end_date` using the default quiz schedule (quiz every 8th Sunday).
 
 | Column | Example | Required |
 |--------|---------|----------|
-| date | 2024-09-08 | Yes |
-| session_type | INSTRUCTIONAL | Yes |
+| date | 2024-09-08 | Yes — must be a Sunday in the academic year |
+| session_type | HOLIDAY | Yes |
 | sunday_number | 1 | No |
+
+**Calendar validation (dry-run and import):**
+
+| Rule | Details |
+|------|---------|
+| Holidays | Do not record attendance on `HOLIDAY`, `PARENT_MEETING`, or `GRADUATION` days |
+| Quiz days | If the calendar includes `QUIZ_1` … `QUIZ_5`, every student must have the matching `quiz_1` … `quiz_5` score on Assessments |
+| Final exam | If the calendar includes `FINAL_EXAM`, every student must have a `final_exam` score |
+| Midterm | If the calendar includes `MIDTERM_PROJECT`, every student must have a `midterm_project` score |
 
 ---
 

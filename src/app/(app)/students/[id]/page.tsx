@@ -47,6 +47,9 @@ export default async function StudentDetailPage({ params }: PageProps) {
               <Link href={`/students/${student.id}/edit`}>Edit</Link>
             </Button>
           )}
+          <Button asChild variant="secondary">
+            <Link href={`/students/${student.id}/profile`}>Profile</Link>
+          </Button>
         </div>
       </div>
 
@@ -128,7 +131,8 @@ export default async function StudentDetailPage({ params }: PageProps) {
                   <th className="pb-3 pr-4 font-medium">School</th>
                   <th className="pb-3 pr-4 font-medium">Grade</th>
                   <th className="pb-3 pr-4 font-medium">Teacher</th>
-                  <th className="pb-3 font-medium">Status</th>
+                  <th className="pb-3 pr-4 font-medium">Status</th>
+                  <th className="pb-3 font-medium">Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -145,11 +149,18 @@ export default async function StudentDetailPage({ params }: PageProps) {
                     <td className="py-3">
                       <Badge variant="outline">{e.status}</Badge>
                     </td>
+                    <td className="py-3">
+                      <Button asChild variant="ghost" size="sm">
+                        <Link href={`/students/${student.id}/profile?year=${e.academicYearId}`}>
+                          Profile
+                        </Link>
+                      </Button>
+                    </td>
                   </tr>
                 ))}
                 {student.enrollments.length === 0 && (
                   <tr>
-                    <td colSpan={5} className="py-6 text-center text-muted-foreground">
+                    <td colSpan={6} className="py-6 text-center text-muted-foreground">
                       No enrollments yet. Add one from the Enrollments module.
                     </td>
                   </tr>

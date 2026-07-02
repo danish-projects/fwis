@@ -14,21 +14,33 @@ import { computeAndSaveEnrollmentGrade } from "../src/lib/grades/compute-enrollm
 import { SUPER_ADMIN_ID } from "./demo-users";
 import {
   ASSESSMENT_FIELD_MAP,
+  assertStudentIdMatchesSchool,
   classroomLabel,
   normalizeAttendanceStatus,
   normalizeGender,
   normalizeGrade,
   normalizeSection,
   normalizeSessionType,
+  normalizeStudentId,
   parseDate,
   parseOptionalScore,
   studentKey,
 } from "./import/normalize";
 import { readImportWorkbook } from "./import/read-workbook";
+import { resolveEnrollmentId } from "./import/resolve-enrollment";
 import { assertAcademicYearScope, assertSchoolScope } from "./import/validate-scope";
+import {
+  validateImportStudentReferences,
+  formatStudentReferenceValidation,
+} from "./import/validate-student-ids";
+import {
+  validateImportCalendar,
+  formatCalendarValidation,
+} from "./import/validate-calendar";
 import { confirmSchoolYearPurge } from "./import/prompt-confirm";
 import { encryptStudentPiiForDb } from "../src/lib/students/student-pii";
 import {
+  adoptStudentNumberSequence,
   allocateStudentNumber,
   deriveCityCode,
 } from "../src/lib/students/student-number";
@@ -103,6 +115,22 @@ async function main() {
     assertAcademicYearScope(row, "Assessments", i + 2, academicYearName);
   });
 
+  const expectedCityCode = deriveCityCode(city);
+  const studentValidation = validateImportStudentReferences(
+    data.students,
+    data.attendance,
+    data.assessments,
+    expectedCityCode
+  );
+  const calendarValidation = validateImportCalendar(
+    yearStart,
+    yearEnd,
+    data.calendarOptional,
+    data.attendance,
+    data.assessments,
+    data.students
+  );
+
   console.log("Import summary:");
   console.log(`  School:        ${setup.school_name} (${city}, ${state})`);
   console.log(`  Academic year: ${academicYearName}`);
@@ -111,6 +139,10 @@ async function main() {
   console.log(`  Attendance:    ${data.attendance.length}`);
   console.log(`  Assessments:   ${data.assessments.length}`);
   console.log(`  Calendar rows: ${data.calendarOptional.length} (optional)`);
+  console.log("");
+  console.log(formatStudentReferenceValidation(studentValidation));
+  console.log("");
+  console.log(formatCalendarValidation(calendarValidation));
   console.log("");
 
   const school = await prisma.school.findFirst({
@@ -159,7 +191,7 @@ async function main() {
       );
       console.log('Use --yes to skip the prompt: npm run import:school -- --file ... --yes');
     }
-    console.log("\nDry run complete — no database changes made.");
+    console.log("\nDry run complete — all validations passed, no database changes made.");
     return;
   }
 
@@ -341,6 +373,7 @@ async function main() {
   }
   console.log(`Teachers imported: ${teacherByEmail.size}`);
 
+  const enrollmentByStudentId = new Map<string, string>();
   const enrollmentByStudentKey = new Map<string, string>();
 
   for (const row of data.students) {
@@ -353,10 +386,24 @@ async function main() {
       throw new Error(`Unknown teacher_email "${row.teacher_email}" for student ${row.first_name} ${row.last_name}`);
     }
 
+    const explicitStudentId = row.student_id?.trim()
+      ? normalizeStudentId(row.student_id)
+      : null;
+    if (explicitStudentId) {
+      assertStudentIdMatchesSchool(explicitStudentId, schoolCityCode, gender);
+    }
+
     const classroom = await resolveClassroom(row.grade, row.section);
 
     const student = await prisma.$transaction(async (tx) => {
-      const studentNumber = await allocateStudentNumber(tx, schoolCityCode, gender);
+      const studentNumber = explicitStudentId
+        ? explicitStudentId
+        : await allocateStudentNumber(tx, schoolCityCode, gender);
+
+      if (explicitStudentId) {
+        await adoptStudentNumberSequence(tx, studentNumber, gender);
+      }
+
       const pii = encryptStudentPiiForDb({
         dateOfBirth: null,
         parentName: row.parent_name?.trim() || null,
@@ -394,12 +441,18 @@ async function main() {
       },
     });
 
+    enrollmentByStudentId.set(student.studentNumber!, enrollment.id);
     enrollmentByStudentKey.set(
       studentKey(row.first_name, row.last_name, gradeNum, sectionName),
       enrollment.id
     );
   }
-  console.log(`Students/enrollments imported: ${enrollmentByStudentKey.size}`);
+  console.log(`Students/enrollments imported: ${enrollmentByStudentId.size}`);
+
+  const enrollmentMaps = {
+    byStudentId: enrollmentByStudentId,
+    byStudentKey: enrollmentByStudentKey,
+  };
 
   const calendarDays = await prisma.academicCalendarDay.findMany({
     where: { academicYearId: academicYear.id, deletedAt: null },
@@ -409,19 +462,12 @@ async function main() {
   );
 
   let attendanceCount = 0;
-  for (const row of data.attendance) {
-    const gradeNum = normalizeGrade(row.grade);
-    const sectionName = normalizeSection(row.section);
-    const key = studentKey(
-      row.student_first_name,
-      row.student_last_name,
-      gradeNum,
-      sectionName
+  for (const [index, row] of data.attendance.entries()) {
+    const enrollmentId = resolveEnrollmentId(
+      enrollmentMaps,
+      row,
+      `Attendance row ${index + 2}`
     );
-    const enrollmentId = enrollmentByStudentKey.get(key);
-    if (!enrollmentId) {
-      throw new Error(`Attendance row for unknown student: ${row.student_first_name} ${row.student_last_name}`);
-    }
 
     const dateKey = parseDate(row.date, "attendance date").toISOString().slice(0, 10);
     const calendarDayId = calendarByDate.get(dateKey);
@@ -449,19 +495,12 @@ async function main() {
   console.log(`Attendance records imported: ${attendanceCount}`);
 
   let assessmentCount = 0;
-  for (const row of data.assessments) {
-    const gradeNum = normalizeGrade(row.grade);
-    const sectionName = normalizeSection(row.section);
-    const key = studentKey(
-      row.student_first_name,
-      row.student_last_name,
-      gradeNum,
-      sectionName
+  for (const [index, row] of data.assessments.entries()) {
+    const enrollmentId = resolveEnrollmentId(
+      enrollmentMaps,
+      row,
+      `Assessments row ${index + 2}`
     );
-    const enrollmentId = enrollmentByStudentKey.get(key);
-    if (!enrollmentId) {
-      throw new Error(`Assessment row for unknown student: ${row.student_first_name} ${row.student_last_name}`);
-    }
 
     for (const { column, type } of ASSESSMENT_FIELD_MAP) {
       const score = parseOptionalScore(row[column]);

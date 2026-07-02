@@ -257,6 +257,13 @@ const SETUP_NAV: NavItem[] = [
     permissions: ["grading-scale:read"],
     roles: ["SUPER_ADMIN", "SCHOOL_ADMIN"],
   },
+  {
+    title: "Data Backup",
+    href: "/backup",
+    icon: "Download",
+    permissions: ["reports:export"],
+    roles: ["SUPER_ADMIN", "SCHOOL_ADMIN"],
+  },
 ];
 
 const STUDENTS_NAV: NavItem[] = [

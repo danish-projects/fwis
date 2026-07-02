@@ -19,6 +19,8 @@
 
 # production
 /build
+/hosting-build
+/hosting-build.zip
 
 # misc
 .DS_Store

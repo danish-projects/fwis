@@ -24,6 +24,67 @@ export function isValidStudentNumber(value: string): boolean {
   return STUDENT_NUMBER_PATTERN.test(value);
 }
 
+export function parseStudentNumber(value: string): {
+  cityCode: string;
+  genderPrefix: "B" | "G";
+  sequence: number;
+} {
+  const normalized = value.trim().toUpperCase();
+  const match = normalized.match(/^([A-Z]{3})-([BG])(\d{1,5})$/);
+  if (!match) {
+    throw new Error(
+      `Invalid student_id "${value}". Expected format HOU-B40 (3-letter city, B/G, number).`
+    );
+  }
+  return {
+    cityCode: match[1],
+    genderPrefix: match[2] as "B" | "G",
+    sequence: Number(match[3]),
+  };
+}
+
+/** Ensure sequence counter is at least as high as an imported/explicit student number. */
+export async function adoptStudentNumberSequence(
+  tx: Prisma.TransactionClient,
+  studentNumber: string,
+  gender: string
+): Promise<void> {
+  const parsed = parseStudentNumber(studentNumber);
+  const expectedPrefix = genderToPrefix(gender);
+  if (parsed.genderPrefix !== expectedPrefix) {
+    throw new Error(
+      `student_id "${studentNumber}" does not match gender ${gender} (expected ${expectedPrefix}).`
+    );
+  }
+
+  const existing = await tx.studentNumberSequence.findUnique({
+    where: {
+      cityCode_genderPrefix: {
+        cityCode: parsed.cityCode,
+        genderPrefix: parsed.genderPrefix,
+      },
+    },
+    select: { lastNumber: true },
+  });
+
+  if (!existing || existing.lastNumber < parsed.sequence) {
+    await tx.studentNumberSequence.upsert({
+      where: {
+        cityCode_genderPrefix: {
+          cityCode: parsed.cityCode,
+          genderPrefix: parsed.genderPrefix,
+        },
+      },
+      create: {
+        cityCode: parsed.cityCode,
+        genderPrefix: parsed.genderPrefix,
+        lastNumber: parsed.sequence,
+      },
+      update: { lastNumber: parsed.sequence },
+    });
+  }
+}
+
 export async function allocateStudentNumber(
   tx: Prisma.TransactionClient,
   cityCode: string,

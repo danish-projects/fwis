@@ -337,9 +337,12 @@ export async function getAttendanceSession(
 }
 
 async function attachEnrollmentCounts<
-  T extends { id: string; schoolId: string; _count: { enrollments: number } },
->(classrooms: T[], selectedYear: Awaited<ReturnType<typeof getSelectedAcademicYear>>) {
-  if (classrooms.length === 0) return classrooms;
+  T extends { id: string; schoolId: string },
+>(
+  classrooms: T[],
+  selectedYear: Awaited<ReturnType<typeof getSelectedAcademicYear>>
+): Promise<Array<T & { _count: { enrollments: number } }>> {
+  if (classrooms.length === 0) return [];
 
   const schoolIds = [...new Set(classrooms.map((c) => c.schoolId))];
   const yearBySchool = await resolveAcademicYearIdsForSchools(

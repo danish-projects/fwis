@@ -8,6 +8,14 @@ export const listPaginationSchema = z.object({
 
 export type ListPaginationInput = z.infer<typeof listPaginationSchema>;
 
+/** Treat empty query-string values as undefined (e.g. "All statuses"). */
+export function emptyToUndefined<T extends z.ZodType>(schema: T) {
+  return z.preprocess(
+    (val) => (val === "" || val === null || val === undefined ? undefined : val),
+    schema
+  );
+}
+
 /** Accepts boolean (server actions) or "true"/"false" strings (URL params). */
 export const optionalBooleanQuery = z
   .union([z.boolean(), z.enum(["true", "false"])])

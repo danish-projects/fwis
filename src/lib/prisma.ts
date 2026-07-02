@@ -1,14 +1,43 @@
 import { PrismaClient } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
+import type { PoolConfig } from "pg";
 
 type LogLevel = "query" | "info" | "warn" | "error";
 
-function secureConnectionString(url: string): string {
-  if (!url.includes("supabase.com") && !url.includes("supabase.co")) {
-    return url;
+function isSupabaseUrl(url: string): boolean {
+  return url.includes("supabase.com") || url.includes("supabase.co");
+}
+
+/** Remove sslmode params so pg uses the explicit `ssl` config instead. */
+function stripSslQueryParams(url: string): string {
+  try {
+    const parsed = new URL(url);
+    parsed.searchParams.delete("sslmode");
+    parsed.searchParams.delete("uselibpqcompat");
+    return parsed.toString();
+  } catch {
+    return url
+      .replace(/([?&])sslmode=[^&]*(?=&|$)/g, "$1")
+      .replace(/([?&])uselibpqcompat=[^&]*(?=&|$)/g, "$1")
+      .replace(/\?&/, "?")
+      .replace(/[?&]$/, "");
   }
-  if (/[?&]sslmode=/.test(url)) return url;
-  return `${url}${url.includes("?") ? "&" : "?"}sslmode=require`;
+}
+
+function createPgPoolConfig(rawUrl: string): PoolConfig {
+  if (!isSupabaseUrl(rawUrl)) {
+    return { connectionString: rawUrl };
+  }
+
+  const connectionString = stripSslQueryParams(rawUrl);
+  const rejectUnauthorized =
+    process.env.NODE_ENV === "production" &&
+    process.env.DATABASE_SSL_REJECT_UNAUTHORIZED !== "false";
+
+  return {
+    connectionString,
+    ssl: { rejectUnauthorized },
+  };
 }
 
 export function createPrismaClient(connectionString?: string) {
@@ -18,8 +47,7 @@ export function createPrismaClient(connectionString?: string) {
     throw new Error("DATABASE_URL or DIRECT_URL is not set");
   }
 
-  const url = secureConnectionString(rawUrl);
-  const adapter = new PrismaPg({ connectionString: url });
+  const adapter = new PrismaPg(createPgPoolConfig(rawUrl));
   const log: LogLevel[] =
     process.env.NODE_ENV === "development" ? ["error", "warn"] : ["error"];
 
