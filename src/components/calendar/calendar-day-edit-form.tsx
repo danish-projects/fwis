@@ -6,6 +6,7 @@ import { useState } from "react";
 import { toast } from "sonner";
 import { deleteCalendarDay, updateCalendarDay } from "@/actions/calendar";
 import { SessionTypeSelect } from "@/components/calendar/session-type-select";
+import { formatSundayDate } from "@/lib/calendar/select-default-day";
 import { formatLessonPlanLabel } from "@/lib/calendar/lesson-plan";
 import { isAttendanceNeeded } from "@/lib/grades/attendance-percentage";
 import { asSessionType, type SessionType } from "@/lib/setup-types";
@@ -70,13 +71,7 @@ export function CalendarDayEditForm({ day }: CalendarDayEditFormProps) {
           </Button>
           <h1 className="text-2xl font-bold">Edit Calendar Day</h1>
           <p className="text-muted-foreground">
-            {day.academicYear.name} ·{" "}
-            {new Date(day.date).toLocaleDateString("en-US", {
-              weekday: "long",
-              year: "numeric",
-              month: "long",
-              day: "numeric",
-            })}
+            {day.academicYear.name} · {formatSundayDate(day.date)}
           </p>
         </div>
         <Button

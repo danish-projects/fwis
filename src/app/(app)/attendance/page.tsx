@@ -1,14 +1,25 @@
 import Link from "next/link";
 import { getClassroomsForAttendance } from "@/actions/attendance";
-import { requirePermission } from "@/lib/auth/session";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { getSessionUser, requirePermission } from "@/lib/auth/session";
+import { ClassroomCardsGrid } from "@/components/shared/classroom-cards-grid";
 import { Button } from "@/components/ui/button";
+import { filterClassroomsForSelectedSchool } from "@/lib/school/filter-classrooms";
+import { getSelectedSchool } from "@/lib/school/resolve-school";
 
 export const metadata = { title: "Attendance" };
 
 export default async function AttendancePage() {
   await requirePermission("attendance:read");
-  const classrooms = await getClassroomsForAttendance();
+  const user = await getSessionUser();
+  const [classrooms, selectedSchool] = await Promise.all([
+    getClassroomsForAttendance(),
+    user ? getSelectedSchool(user) : null,
+  ]);
+
+  const visibleClassrooms = filterClassroomsForSelectedSchool(
+    classrooms,
+    selectedSchool
+  );
 
   return (
     <div className="space-y-6">
@@ -17,6 +28,7 @@ export default async function AttendancePage() {
           <h1 className="text-2xl font-bold md:text-3xl">Attendance</h1>
           <p className="text-muted-foreground">
             Mark Sunday attendance by grade or review an entire grade level
+            {selectedSchool ? ` · ${selectedSchool.name}` : ""}
           </p>
         </div>
         <Button asChild>
@@ -24,24 +36,15 @@ export default async function AttendancePage() {
         </Button>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {classrooms.map((c) => (
-          <Card key={c.id}>
-            <CardHeader>
-              <CardTitle className="text-lg">{c.name}</CardTitle>
-              <p className="text-sm text-muted-foreground">{c.school.name}</p>
-            </CardHeader>
-            <CardContent className="flex items-center justify-between">
-              <span className="text-sm text-muted-foreground">
-                {c._count.enrollments} students
-              </span>
-              <Button asChild size="sm">
-                <Link href={`/attendance/${c.id}`}>Take Attendance</Link>
-              </Button>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+      <ClassroomCardsGrid
+        classrooms={visibleClassrooms.map((c) => ({
+          id: c.id,
+          name: c.name,
+          _count: c._count,
+        }))}
+        hrefPrefix="/attendance"
+        actionLabel="Take Attendance"
+      />
     </div>
   );
 }

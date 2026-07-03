@@ -7,6 +7,8 @@ import { getTeacherClassrooms } from "@/lib/auth/teacher-defaults";
 import { AssessmentMatrix } from "@/components/assessments/assessment-matrix";
 import { AssessmentsClassroomContent } from "@/components/assessments/assessments-classroom-content";
 import { ClassroomEntryLoading } from "@/components/shared/grade-change-loading";
+import { filterClassroomsForSelectedSchool } from "@/lib/school/filter-classrooms";
+import { getSelectedSchool } from "@/lib/school/resolve-school";
 
 export const metadata = { title: "Assessment Scores" };
 
@@ -27,12 +29,27 @@ export default async function TeacherAssessmentsClassPage({
     redirect("/dashboard/teacher");
   }
 
-  const data = await getAssessmentMatrix(classroomId, year);
+  const [data, teacherClassrooms, selectedSchool] = await Promise.all([
+    getAssessmentMatrix(classroomId, year),
+    getTeacherClassrooms(user),
+    getSelectedSchool(user),
+  ]);
   if (!data) notFound();
 
-  const classroomOptions = (await getTeacherClassrooms(user)).map((c) => ({
+  if (selectedSchool && data.classroom.schoolId !== selectedSchool.id) {
+    redirect("/dashboard/teacher");
+  }
+
+  const classroomOptions = filterClassroomsForSelectedSchool(
+    teacherClassrooms,
+    selectedSchool
+  ).map((c) => ({
     id: c.id,
     name: c.name,
+    schoolId: c.schoolId,
+    school: c.school,
+    grade: c.grade,
+    section: c.section,
   }));
 
   return (
@@ -53,7 +70,11 @@ export default async function TeacherAssessmentsClassPage({
           classroomOptions={classroomOptions}
           basePath="/teacher/assessments"
         >
-          <AssessmentMatrix classroomId={classroomId} rows={data.rows} />
+          <AssessmentMatrix
+            classroomId={classroomId}
+            rows={data.rows}
+            columnDates={data.columnDates}
+          />
         </AssessmentsClassroomContent>
       </Suspense>
     </div>

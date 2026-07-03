@@ -3,6 +3,7 @@
 import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { toast } from "sonner";
+import { WeekColumnFilterSelect } from "@/components/attendance/week-column-filter-select";
 import { AttendanceStatus, BehaviorValue, SessionType } from "@/lib/setup-types";
 import {
   bulkUpsertAttendanceMatrix,
@@ -19,6 +20,11 @@ import {
 } from "@/lib/attendance/session-type-styles";
 import { SESSION_TYPE_LABELS } from "@/lib/calendar/generate-sundays";
 import { formatLessonPlanLabel } from "@/lib/calendar/lesson-plan";
+import {
+  ALL_WEEKS_VALUE,
+  filterCalendarDays,
+  type WeekColumnFilter,
+} from "@/lib/attendance/week-column-filter";
 import { Button } from "@/components/ui/button";
 import { formatDate } from "@/lib/utils";
 
@@ -96,6 +102,16 @@ export function AttendanceGradeMatrix({
   const router = useRouter();
   const searchParams = useSearchParams();
   const [isPending, startTransition] = useTransition();
+  const [weekFilter, setWeekFilter] = useState<WeekColumnFilter>(ALL_WEEKS_VALUE);
+
+  const visibleCalendarDays = useMemo(
+    () => filterCalendarDays(calendarDays, weekFilter),
+    [calendarDays, weekFilter]
+  );
+
+  useEffect(() => {
+    setWeekFilter(ALL_WEEKS_VALUE);
+  }, [schoolId, gradeId, calendarDays.length]);
 
   const initialMatrix = useMemo(() => buildInitialMatrix(students), [students]);
   const baselineRef = useRef(initialMatrix);
@@ -241,6 +257,12 @@ export function AttendanceGradeMatrix({
             ))}
           </select>
         </div>
+        <WeekColumnFilterSelect
+          weeks={calendarDays}
+          value={weekFilter}
+          onChange={setWeekFilter}
+          id="summaryWeek"
+        />
       </div>
 
       {isDirty && (
@@ -266,20 +288,22 @@ export function AttendanceGradeMatrix({
         </p>
       ) : (
         <div className="overflow-x-auto rounded-lg border">
-          <table className="w-full min-w-[900px] border-collapse text-xs">
+          <table className="w-full max-w-full border-collapse text-xs">
             <thead>
               <tr>
-                <th className="sticky left-0 z-20 min-w-[160px] border-b border-r bg-muted px-2 py-2 text-left font-medium">
+                <th className="sticky left-0 z-20 min-w-[7.5rem] border-b border-r bg-muted px-2 py-2 text-left font-medium sm:min-w-[10rem]">
                   Student
                 </th>
-                {calendarDays.map((day) => (
+                {visibleCalendarDays.map((day) => (
                   <th
                     key={day.id}
-                    className={`min-w-[72px] border-b px-1 py-2 text-center font-medium ${SESSION_TYPE_HEADER_CLASSES[day.sessionType]}`}
+                    className={`min-w-[3.25rem] border-b px-0.5 py-1.5 text-center font-medium sm:min-w-[4.5rem] sm:px-1 sm:py-2 ${SESSION_TYPE_HEADER_CLASSES[day.sessionType]}`}
                     title={SESSION_TYPE_LABELS[day.sessionType]}
                   >
-                    <div>{formatLessonPlanLabel(day.lessonPlanNumber)}</div>
-                    <div className="text-[10px] font-normal opacity-80">
+                    <div className="text-[10px] sm:text-xs">
+                      {formatLessonPlanLabel(day.lessonPlanNumber)}
+                    </div>
+                    <div className="text-[9px] font-normal opacity-80 sm:text-[10px]">
                       {formatDate(day.date)}
                     </div>
                   </th>
@@ -290,7 +314,7 @@ export function AttendanceGradeMatrix({
               {students.map((student) => (
                 <tr key={student.enrollmentId} className="border-b last:border-0">
                   <td className="sticky left-0 z-10 border-r bg-background px-2 py-1">
-                    <div className="font-medium">{student.studentName}</div>
+                    <div className="text-xs font-medium sm:text-sm">{student.studentName}</div>
                     {student.studentNumber ? (
                       <div className="font-mono text-[10px] text-muted-foreground">
                         {student.studentNumber}
@@ -300,7 +324,7 @@ export function AttendanceGradeMatrix({
                       {student.classroomName}
                     </div>
                   </td>
-                  {calendarDays.map((day) => {
+                  {visibleCalendarDays.map((day) => {
                     const key = cellKey(student.enrollmentId, day.id);
                     const cell = cells.get(key) ?? { status: null };
                     const markable = isMarkableSessionType(day.sessionType);
@@ -323,7 +347,7 @@ export function AttendanceGradeMatrix({
                       >
                         <div className="flex flex-col gap-0.5">
                           <select
-                            className="h-7 w-full rounded border border-input bg-background px-0.5 text-center text-[11px]"
+                            className="h-7 w-full min-w-0 rounded border border-input bg-background px-0.5 text-center text-[10px] sm:text-[11px]"
                             value={cell.status ?? ""}
                             onChange={(e) =>
                               updateCell(student.enrollmentId, day.id, {
@@ -339,7 +363,7 @@ export function AttendanceGradeMatrix({
                             ))}
                           </select>
                           <select
-                            className="h-7 w-full rounded border border-input bg-background px-0.5 text-center text-[11px]"
+                            className="h-7 w-full min-w-0 rounded border border-input bg-background px-0.5 text-center text-[10px] sm:text-[11px]"
                             value={cell.behaviorValue ?? ""}
                             onChange={(e) =>
                               updateCell(student.enrollmentId, day.id, {

@@ -63,7 +63,7 @@ export async function updateGradingScale(input: GradingScaleConfig) {
     newValues: input as unknown as Prisma.InputJsonValue,
   });
 
-  revalidateTag("grading-scale");
+  revalidateTag("grading-scale", "max");
   revalidatePath("/grading-scale");
   revalidatePath("/transcript");
   revalidatePath("/teacher/transcript");

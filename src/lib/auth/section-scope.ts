@@ -47,7 +47,7 @@ export function buildClassroomListWhere(
 
 export function scopedClassroomIdFilter(
   user: AuthUser
-): Pick<Prisma.ClassroomWhereInput, "id"> | Record<string, never> {
+): { id: { in: string[] } } | Record<string, never> {
   if (user.roles.includes("SUPER_ADMIN")) return {};
   if (isClassroomScopedUser(user)) {
     return { id: { in: user.classroomIds } };

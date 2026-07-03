@@ -4,7 +4,6 @@ import { notFound } from "next/navigation";
 import {
   getClassroomsForConsolidateAttendance,
   getGradeAttendanceMatrix,
-  getSchoolsForAttendanceSummary,
 } from "@/actions/attendance";
 import {
   ALL_CLASSROOMS_VALUE,
@@ -15,11 +14,12 @@ import { getSessionUser, requireRole } from "@/lib/auth/session";
 import { hasPermission } from "@/lib/auth/permissions";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { getSelectedSchool } from "@/lib/school/resolve-school";
 
 export const metadata = { title: "Consolidate Attendance" };
 
 type PageProps = {
-  searchParams: Promise<{ school?: string; classroom?: string }>;
+  searchParams: Promise<{ classroom?: string }>;
 };
 
 function resolveClassroomFilter(
@@ -38,15 +38,12 @@ export default async function TeacherConsolidateAttendancePage({
 }: PageProps) {
   await requireRole("TEACHER");
   const user = await getSessionUser();
-  const { school: schoolParam, classroom: classroomParam } = await searchParams;
+  const { classroom: classroomParam } = await searchParams;
 
-  const schools = await getSchoolsForAttendanceSummary();
-  if (schools.length === 0) notFound();
+  const selectedSchool = user ? await getSelectedSchool(user) : null;
+  if (!selectedSchool) notFound();
 
-  const schoolId = schoolParam && schools.some((s) => s.id === schoolParam)
-    ? schoolParam
-    : schools[0].id;
-
+  const schoolId = selectedSchool.id;
   const classrooms = await getClassroomsForConsolidateAttendance(schoolId);
   const classroomFilter = resolveClassroomFilter(classroomParam, classrooms);
 
@@ -62,7 +59,7 @@ export default async function TeacherConsolidateAttendancePage({
   return (
     <ConsolidateAttendancePageLayout
       title="Consolidate Attendance"
-      description="View and update attendance for your assigned classes"
+      description={`View and update attendance — ${selectedSchool.name}`}
       backLink={
         <Button asChild variant="ghost" size="sm" className="-ml-2 h-8 px-2">
           <Link href="/dashboard/teacher">← Back to dashboard</Link>
@@ -82,12 +79,12 @@ export default async function TeacherConsolidateAttendancePage({
             classroomFilter={classroomFilter}
             calendarDays={matrix.calendarDays}
             students={matrix.students}
-            schools={schools}
+            schools={[selectedSchool]}
             classrooms={classrooms.map((c) => ({
               id: c.id,
               name: c.name,
             }))}
-            showSchoolPicker={schools.length > 0}
+            showSchoolPicker={false}
             canEdit={canEdit}
           />
         </Suspense>

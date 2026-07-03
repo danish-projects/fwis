@@ -388,6 +388,8 @@ export async function getClassroomsForAttendance() {
     orderBy: { name: "asc" },
     include: {
       school: { select: { name: true } },
+      grade: { select: { name: true, sortOrder: true } },
+      section: { select: { name: true } },
     },
   });
 
@@ -593,15 +595,15 @@ export async function getGradeAttendanceMatrix(
 
   const enrollmentOrderBy =
     classroomId != null || gradeId != null
-      ? ([
+      ? [
           { classroom: { name: "asc" as const } },
           { student: { lastName: "asc" as const } },
-        ] as const)
-      : ([
+        ]
+      : [
           { classroom: { grade: { sortOrder: "asc" as const } } },
           { classroom: { name: "asc" as const } },
           { student: { lastName: "asc" as const } },
-        ] as const);
+        ];
 
   const [calendarDays, enrollments] = await Promise.all([
     prisma.academicCalendarDay.findMany({

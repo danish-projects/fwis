@@ -4,9 +4,11 @@ import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
 import { AppSidebar } from "@/components/layout/app-sidebar";
 import { AcademicYearCookieSync } from "@/components/layout/academic-year-cookie-sync";
+import { SchoolCookieSync } from "@/components/layout/school-cookie-sync";
 import { TeacherRouteGuard } from "@/components/layout/teacher-route-guard";
 import type { NavGroup } from "@/lib/auth/permissions";
 import type { AcademicYearSummary } from "@/lib/academic-year/constants";
+import type { SchoolSummary } from "@/lib/school/constants";
 
 type AppShellProps = {
   children: React.ReactNode;
@@ -15,7 +17,8 @@ type AppShellProps = {
   userEmail: string;
   academicYears: AcademicYearSummary[];
   selectedAcademicYearId: string | null;
-  sidebarSchoolName?: string | null;
+  schools: SchoolSummary[];
+  selectedSchoolId: string | null;
   isTeacher?: boolean;
 };
 
@@ -26,7 +29,8 @@ export function AppShell({
   userEmail,
   academicYears,
   selectedAcademicYearId,
-  sidebarSchoolName = null,
+  schools,
+  selectedSchoolId,
   isTeacher = false,
 }: AppShellProps) {
   const router = useRouter();
@@ -41,13 +45,15 @@ export function AppShell({
   return (
     <div className="flex min-h-screen flex-col lg:flex-row">
       <AcademicYearCookieSync yearId={selectedAcademicYearId} />
+      <SchoolCookieSync schoolId={selectedSchoolId} />
       <AppSidebar
         navGroups={navGroups}
         userName={userName}
         userEmail={userEmail}
         academicYears={academicYears}
         selectedAcademicYearId={selectedAcademicYearId}
-        sidebarSchoolName={sidebarSchoolName}
+        schools={schools}
+        selectedSchoolId={selectedSchoolId}
         onSignOut={handleSignOut}
       />
       <main className="flex-1 overflow-x-hidden">

@@ -1,13 +1,15 @@
 import Link from "next/link";
 import { Suspense } from "react";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { getTranscriptMatrix } from "@/actions/assessments";
 import { getClassroomsForAssessment } from "@/actions/enrollments";
-import { requirePermission } from "@/lib/auth/session";
+import { getSessionUser, requirePermission } from "@/lib/auth/session";
 import { TranscriptMatrix } from "@/components/assessments/transcript-matrix";
 import { AssessmentsClassroomContent } from "@/components/assessments/assessments-classroom-content";
 import { ClassroomEntryLoading } from "@/components/shared/grade-change-loading";
 import { Button } from "@/components/ui/button";
+import { filterClassroomsForSelectedSchool } from "@/lib/school/filter-classrooms";
+import { getSelectedSchool } from "@/lib/school/resolve-school";
 
 export const metadata = { title: "Transcript" };
 
@@ -21,16 +23,31 @@ export default async function ClassroomTranscriptPage({
   searchParams,
 }: PageProps) {
   await requirePermission("assessments:read");
+  const user = await getSessionUser();
   const { classroomId } = await params;
   const { year } = await searchParams;
 
-  const data = await getTranscriptMatrix(classroomId, year);
+  const [data, classrooms, selectedSchool] = await Promise.all([
+    getTranscriptMatrix(classroomId, year),
+    getClassroomsForAssessment(),
+    user ? getSelectedSchool(user) : null,
+  ]);
   if (!data) notFound();
 
-  const classrooms = await getClassroomsForAssessment();
-  const classroomOptions = classrooms.map((c) => ({
+  if (selectedSchool && data.classroom.schoolId !== selectedSchool.id) {
+    redirect("/transcript");
+  }
+
+  const classroomOptions = filterClassroomsForSelectedSchool(
+    classrooms,
+    selectedSchool
+  ).map((c) => ({
     id: c.id,
     name: c.name,
+    schoolId: c.schoolId,
+    school: c.school,
+    grade: c.grade,
+    section: c.section,
   }));
 
   return (
@@ -54,7 +71,11 @@ export default async function ClassroomTranscriptPage({
           classroomOptions={classroomOptions}
           basePath="/transcript"
         >
-          <TranscriptMatrix rows={data.rows} gradingScale={data.gradingScale} />
+          <TranscriptMatrix
+            rows={data.rows}
+            gradingScale={data.gradingScale}
+            columnDates={data.columnDates}
+          />
         </AssessmentsClassroomContent>
       </Suspense>
     </div>

@@ -1,12 +1,19 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useEffect, useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import { toast } from "sonner";
+import { AssessmentColumnFilterSelect } from "@/components/assessments/assessment-column-filter-select";
 import { StudentNameWithGender } from "@/components/students/student-name-with-gender";
 import type { AssessmentType, GenderCode } from "@/lib/setup-types";
 import { bulkUpsertAssessmentScores } from "@/actions/assessments";
+import type { AssessmentColumnDates } from "@/lib/assessments/assessment-column-dates";
 import type { ScoreMatrixRow } from "@/lib/assessments/score-matrix-types";
+import {
+  ALL_ASSESSMENT_COLUMNS_VALUE,
+  getVisibleAssessmentColumns,
+  type AssessmentColumnFilter,
+} from "@/lib/assessments/assessment-column-filter";
 import {
   ASSESSMENT_TYPE_LABELS,
   ASSESSMENT_TYPES,
@@ -17,12 +24,25 @@ import { Input } from "@/components/ui/input";
 type AssessmentMatrixProps = {
   classroomId: string;
   rows: ScoreMatrixRow[];
+  columnDates?: AssessmentColumnDates;
 };
 
-export function AssessmentMatrix({ classroomId, rows: initialRows }: AssessmentMatrixProps) {
+export function AssessmentMatrix({
+  classroomId,
+  rows: initialRows,
+  columnDates = {},
+}: AssessmentMatrixProps) {
   const router = useRouter();
   const [rows, setRows] = useState(initialRows);
+  const [columnFilter, setColumnFilter] = useState<AssessmentColumnFilter>(
+    ALL_ASSESSMENT_COLUMNS_VALUE
+  );
   const [isPending, startTransition] = useTransition();
+
+  const visibleColumns = useMemo(
+    () => getVisibleAssessmentColumns(columnFilter),
+    [columnFilter]
+  );
 
   useEffect(() => {
     setRows(initialRows);
@@ -74,18 +94,45 @@ export function AssessmentMatrix({ classroomId, rows: initialRows }: AssessmentM
     });
   }
 
-  const columnCount = ASSESSMENT_TYPES.length + 1;
+  const columnCount = visibleColumns.length + 1;
 
   return (
     <div className="space-y-4">
+      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
+        <AssessmentColumnFilterSelect
+          value={columnFilter}
+          onChange={setColumnFilter}
+          label="Show column"
+        />
+        {columnFilter !== ALL_ASSESSMENT_COLUMNS_VALUE && (
+          <p className="text-sm text-muted-foreground sm:pb-2">
+            Showing {visibleColumns.length} column
+            {visibleColumns.length === 1 ? "" : "s"} — choose All to see every quiz and exam.
+          </p>
+        )}
+      </div>
+
       <div className="overflow-x-auto rounded-lg border">
-        <table className="w-full min-w-[720px] text-sm">
+        <table className="w-full max-w-full border-collapse text-xs sm:text-sm">
           <thead>
             <tr className="border-b bg-muted/50 text-left">
-              <th className="sticky left-0 z-10 bg-muted/50 p-3 font-medium">Student</th>
-              {ASSESSMENT_TYPES.map((type) => (
-                <th key={type} className="p-3 font-medium whitespace-nowrap">
-                  {ASSESSMENT_TYPE_LABELS[type]}
+              <th className="sticky left-0 z-10 min-w-[7.5rem] bg-muted/50 px-2 py-2 font-medium sm:min-w-[10rem] sm:px-3 sm:py-3">
+                Student
+              </th>
+              {visibleColumns.map((type) => (
+                <th
+                  key={type}
+                  className="min-w-[4.5rem] px-1 py-2 font-medium whitespace-nowrap sm:min-w-[5.5rem] sm:px-2 sm:py-3"
+                >
+                  <div className="hidden sm:block">{ASSESSMENT_TYPE_LABELS[type]}</div>
+                  <div className="sm:hidden">
+                    {ASSESSMENT_TYPE_LABELS[type].replace("Project", "").trim()}
+                  </div>
+                  {columnDates[type] ? (
+                    <div className="text-[9px] font-normal text-muted-foreground sm:text-[10px]">
+                      {columnDates[type]}
+                    </div>
+                  ) : null}
                 </th>
               ))}
             </tr>
@@ -93,20 +140,20 @@ export function AssessmentMatrix({ classroomId, rows: initialRows }: AssessmentM
           <tbody>
             {rows.map((row) => (
               <tr key={row.enrollmentId} className="border-b last:border-0">
-                <td className="sticky left-0 z-10 bg-background p-3 font-medium">
+                <td className="sticky left-0 z-10 bg-background px-2 py-1.5 font-medium sm:px-3 sm:py-2">
                   <StudentNameWithGender
                     name={row.studentName}
                     gender={row.gender as GenderCode | string}
                     studentNumber={row.studentNumber}
                   />
                 </td>
-                {ASSESSMENT_TYPES.map((type) => (
-                  <td key={type} className="p-2">
+                {visibleColumns.map((type) => (
+                  <td key={type} className="px-1 py-1 sm:px-2">
                     <Input
                       type="number"
                       min={0}
                       max={100}
-                      className="h-9 w-20"
+                      className="h-8 w-full min-w-0 px-1 text-center text-xs sm:h-9 sm:w-20 sm:text-sm"
                       value={row.scores[type] ?? ""}
                       onChange={(e) =>
                         updateScore(row.enrollmentId, type, e.target.value)

@@ -71,14 +71,12 @@ export function ThemeProvider({
   children,
   initialTheme = "system",
 }: ThemeProviderProps) {
-  const hasExplicitInitialTheme =
-    initialTheme === "light" || initialTheme === "dark";
-
   const [theme, setThemeState] = useState<ThemeSetting>(initialTheme);
   const [resolvedTheme, setResolvedTheme] = useState<ResolvedTheme>(() =>
     getInitialResolvedTheme(initialTheme)
   );
-  const [mounted, setMounted] = useState(hasExplicitInitialTheme);
+  // Always false on first render so SSR HTML matches client hydration.
+  const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
     const stored = readStoredTheme();

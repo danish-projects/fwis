@@ -1,9 +1,11 @@
 import { Suspense } from "react";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { getAttendanceSession, getClassroomsForAttendance } from "@/actions/attendance";
-import { requirePermission } from "@/lib/auth/session";
+import { getSessionUser, requirePermission } from "@/lib/auth/session";
 import { AttendanceEntry } from "@/components/attendance/attendance-entry";
 import { Skeleton } from "@/components/ui/skeleton";
+import { filterClassroomsForSelectedSchool } from "@/lib/school/filter-classrooms";
+import { getSelectedSchool } from "@/lib/school/resolve-school";
 
 type PageProps = {
   params: Promise<{ classroomId: string }>;
@@ -15,16 +17,31 @@ export default async function AdminAttendanceClassPage({
   searchParams,
 }: PageProps) {
   await requirePermission("attendance:read");
+  const user = await getSessionUser();
   const { classroomId } = await params;
   const { day } = await searchParams;
 
-  const session = await getAttendanceSession(classroomId, day);
+  const [session, classrooms, selectedSchool] = await Promise.all([
+    getAttendanceSession(classroomId, day),
+    getClassroomsForAttendance(),
+    user ? getSelectedSchool(user) : null,
+  ]);
   if (!session) notFound();
 
-  const classrooms = await getClassroomsForAttendance();
-  const classroomOptions = classrooms.map((c) => ({
+  if (selectedSchool && session.classroom.schoolId !== selectedSchool.id) {
+    redirect("/attendance");
+  }
+
+  const classroomOptions = filterClassroomsForSelectedSchool(
+    classrooms,
+    selectedSchool
+  ).map((c) => ({
     id: c.id,
     name: c.name,
+    schoolId: c.schoolId,
+    school: c.school,
+    grade: c.grade,
+    section: c.section,
   }));
 
   return (

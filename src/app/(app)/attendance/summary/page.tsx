@@ -4,32 +4,28 @@ import { notFound } from "next/navigation";
 import {
   getGradeAttendanceMatrix,
   getGradesForAttendanceSummary,
-  getSchoolsForAttendanceSummary,
 } from "@/actions/attendance";
 import { getSessionUser, requirePermission } from "@/lib/auth/session";
-import { getPrimaryRole } from "@/lib/auth/permissions";
 import { AttendanceGradeMatrix } from "@/components/attendance/attendance-grade-matrix";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { getSelectedSchool } from "@/lib/school/resolve-school";
 
 export const metadata = { title: "Grade Attendance Summary" };
 
 type PageProps = {
-  searchParams: Promise<{ school?: string; grade?: string }>;
+  searchParams: Promise<{ grade?: string }>;
 };
 
 export default async function AttendanceSummaryPage({ searchParams }: PageProps) {
   await requirePermission("attendance:read");
   const user = await getSessionUser();
-  const { school: schoolParam, grade: gradeParam } = await searchParams;
+  const { grade: gradeParam } = await searchParams;
 
-  const schools = await getSchoolsForAttendanceSummary();
-  if (schools.length === 0) notFound();
+  const selectedSchool = user ? await getSelectedSchool(user) : null;
+  if (!selectedSchool) notFound();
 
-  const schoolId = schoolParam && schools.some((s) => s.id === schoolParam)
-    ? schoolParam
-    : schools[0].id;
-
+  const schoolId = selectedSchool.id;
   const grades = await getGradesForAttendanceSummary(schoolId);
   const gradeId =
     gradeParam && grades.some((g) => g.id === Number(gradeParam))
@@ -41,9 +37,6 @@ export default async function AttendanceSummaryPage({ searchParams }: PageProps)
       ? await getGradeAttendanceMatrix(schoolId, { gradeId })
       : null;
 
-  const showSchoolPicker =
-    user !== null && getPrimaryRole(user.roles) === "SUPER_ADMIN";
-
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -53,7 +46,7 @@ export default async function AttendanceSummaryPage({ searchParams }: PageProps)
           </Button>
           <h1 className="text-2xl font-bold md:text-3xl">Grade Attendance Summary</h1>
           <p className="text-muted-foreground">
-            Matrix view by grade — students × calendar days
+            Matrix view by grade — {selectedSchool.name}
           </p>
         </div>
         <Button asChild variant="outline" size="sm">
@@ -73,9 +66,9 @@ export default async function AttendanceSummaryPage({ searchParams }: PageProps)
             gradeId={gradeId}
             calendarDays={matrix.calendarDays}
             students={matrix.students}
-            schools={schools}
+            schools={[selectedSchool]}
             grades={grades}
-            showSchoolPicker={showSchoolPicker}
+            showSchoolPicker={false}
           />
         </Suspense>
       )}

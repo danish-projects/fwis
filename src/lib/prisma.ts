@@ -1,8 +1,13 @@
 import { PrismaClient } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
-import type { PoolConfig } from "pg";
 
 type LogLevel = "query" | "info" | "warn" | "error";
+
+/** Structural pool options — avoid @types/pg vs @prisma/adapter-pg PoolConfig mismatch. */
+type PgPoolOptions = {
+  connectionString: string;
+  ssl?: { rejectUnauthorized: boolean };
+};
 
 function isSupabaseUrl(url: string): boolean {
   return url.includes("supabase.com") || url.includes("supabase.co");
@@ -24,7 +29,7 @@ function stripSslQueryParams(url: string): string {
   }
 }
 
-function createPgPoolConfig(rawUrl: string): PoolConfig {
+function createPgPoolConfig(rawUrl: string): PgPoolOptions {
   if (!isSupabaseUrl(rawUrl)) {
     return { connectionString: rawUrl };
   }
@@ -47,7 +52,9 @@ export function createPrismaClient(connectionString?: string) {
     throw new Error("DATABASE_URL or DIRECT_URL is not set");
   }
 
-  const adapter = new PrismaPg(createPgPoolConfig(rawUrl));
+  const adapter = new PrismaPg(
+    createPgPoolConfig(rawUrl) as ConstructorParameters<typeof PrismaPg>[0]
+  );
   const log: LogLevel[] =
     process.env.NODE_ENV === "development" ? ["error", "warn"] : ["error"];
 

@@ -10,6 +10,10 @@ import {
 type ClassroomOption = {
   id: string;
   name: string;
+  schoolId: string;
+  school: { name: string };
+  grade?: { name: string; sortOrder?: number } | null;
+  section?: { name: string } | null;
 };
 
 type AssessmentsClassroomContentProps = {

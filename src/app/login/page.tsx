@@ -22,35 +22,35 @@ function LoginForm() {
     e.preventDefault();
     setLoading(true);
 
-    const response = await fetch("/api/auth/sign-in", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, password }),
-    });
+    try {
+      const response = await fetch("/api/auth/sign-in", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password }),
+      });
 
-    const contentType = response.headers.get("content-type") ?? "";
-    let payload: { error?: string } = {};
-    if (contentType.includes("application/json")) {
-      payload = (await response.json()) as { error?: string };
-    } else if (!response.ok) {
-      toast.error("Sign in failed. Please try again.");
-      setLoading(false);
-      return;
-    }
+      const contentType = response.headers.get("content-type") ?? "";
+      const payload = contentType.includes("application/json")
+        ? ((await response.json()) as { error?: string })
+        : { error: "Sign in failed. Please try again." };
 
-    if (!response.ok) {
-      if (response.status === 429) {
-        toast.error("Too many login attempts. Please wait and try again.");
-      } else {
-        toast.error(payload.error ?? "Sign in failed");
+      if (!response.ok) {
+        if (response.status === 429) {
+          toast.error("Too many login attempts. Please wait and try again.");
+        } else {
+          toast.error(payload.error ?? "Sign in failed");
+        }
+        return;
       }
-      setLoading(false);
-      return;
-    }
 
-    toast.success("Welcome back!");
-    router.push(redirect);
-    router.refresh();
+      toast.success("Welcome back!");
+      router.push(redirect);
+      router.refresh();
+    } catch {
+      toast.error("Sign in failed. Please try again.");
+    } finally {
+      setLoading(false);
+    }
   }
 
   return (

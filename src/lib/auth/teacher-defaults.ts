@@ -30,7 +30,11 @@ export async function getTeacherClassrooms(user: AuthUser) {
   return prisma.classroom.findMany({
     where: { id: { in: user.classroomIds }, deletedAt: null, isActive: true },
     orderBy: { name: "asc" },
-    include: { school: { select: { name: true } } },
+    include: {
+      school: { select: { name: true } },
+      grade: { select: { name: true, sortOrder: true } },
+      section: { select: { name: true } },
+    },
   });
 }
 

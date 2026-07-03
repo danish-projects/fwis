@@ -1,4 +1,8 @@
 import { prisma } from "@/lib/prisma";
+import {
+  calendarDateKey,
+  localTodayKey,
+} from "@/lib/calendar/calendar-date";
 import { SESSION_TYPE_LABELS } from "@/lib/calendar/generate-sundays";
 import { formatLessonPlanLabel } from "@/lib/calendar/lesson-plan";
 import { isAttendanceNeeded } from "@/lib/grades/attendance-percentage";
@@ -30,12 +34,6 @@ type CalendarDayRow = {
   sessionType: string;
 };
 
-function startOfDayMs(date: Date): number {
-  const value = new Date(date);
-  value.setHours(0, 0, 0, 0);
-  return value.getTime();
-}
-
 function sessionLabel(sessionType: string): string {
   return (
     SESSION_TYPE_LABELS[sessionType as SessionTypeCode] ?? sessionType.replace(/_/g, " ")
@@ -45,9 +43,9 @@ function sessionLabel(sessionType: string): string {
 export function buildDashboardCalendarHighlights(
   calendarDays: CalendarDayRow[]
 ): DashboardCalendarHighlights {
-  const todayMs = startOfDayMs(new Date());
-  const sorted = [...calendarDays].sort(
-    (a, b) => startOfDayMs(a.date) - startOfDayMs(b.date)
+  const todayKey = localTodayKey();
+  const sorted = [...calendarDays].sort((a, b) =>
+    calendarDateKey(a.date).localeCompare(calendarDateKey(b.date))
   );
 
   const attendanceWeeks = sorted.filter(
@@ -56,12 +54,14 @@ export function buildDashboardCalendarHighlights(
   );
 
   const todayWeek = attendanceWeeks.find(
-    (day) => startOfDayMs(day.date) === todayMs
+    (day) => calendarDateKey(day.date) === todayKey
   );
   const latestPastWeek = [...attendanceWeeks]
     .reverse()
-    .find((day) => startOfDayMs(day.date) <= todayMs);
-  const nextWeek = attendanceWeeks.find((day) => startOfDayMs(day.date) > todayMs);
+    .find((day) => calendarDateKey(day.date) <= todayKey);
+  const nextWeek = attendanceWeeks.find(
+    (day) => calendarDateKey(day.date) > todayKey
+  );
 
   const currentDay = todayWeek ?? latestPastWeek ?? nextWeek ?? null;
 
@@ -72,18 +72,19 @@ export function buildDashboardCalendarHighlights(
           (day) =>
             (QUIZ_SESSION_TYPE_CODES as readonly string[]).includes(
               day.sessionType
-            ) && startOfDayMs(day.date) > todayMs
+            ) && calendarDateKey(day.date) > todayKey
         )
       : sorted.find(
           (day) =>
             (QUIZ_SESSION_TYPE_CODES as readonly string[]).includes(
               day.sessionType
-            ) && startOfDayMs(day.date) >= todayMs
+            ) && calendarDateKey(day.date) >= todayKey
         );
 
   const upcomingHolidays = sorted
     .filter(
-      (day) => day.sessionType === "HOLIDAY" && startOfDayMs(day.date) >= todayMs
+      (day) =>
+        day.sessionType === "HOLIDAY" && calendarDateKey(day.date) >= todayKey
     )
     .slice(0, 4)
     .map((day) => ({

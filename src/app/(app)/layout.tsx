@@ -4,7 +4,8 @@ import { redirect } from "next/navigation";
 import { AppShell } from "@/components/layout/app-shell";
 import { listAcademicYearsForUser } from "@/lib/academic-year/list-years";
 import { getSelectedAcademicYear } from "@/lib/academic-year/resolve-year";
-import { getSidebarSchoolName } from "@/lib/school/sidebar-school";
+import { listSchoolsForUser } from "@/lib/school/list-schools";
+import { getSelectedSchool } from "@/lib/school/resolve-school";
 
 export default async function AppLayout({
   children,
@@ -16,11 +17,13 @@ export default async function AppLayout({
 
   const isTeacher = getPrimaryRole(user.roles) === "TEACHER";
   const navGroups = getNavGroupsForUser(user.roles);
-  const [academicYears, selectedAcademicYear, sidebarSchoolName] = await Promise.all([
-    listAcademicYearsForUser(user),
-    getSelectedAcademicYear(user),
-    getSidebarSchoolName(user),
-  ]);
+  const [academicYears, selectedAcademicYear, schools, selectedSchool] =
+    await Promise.all([
+      listAcademicYearsForUser(user),
+      getSelectedAcademicYear(user),
+      listSchoolsForUser(user),
+      getSelectedSchool(user),
+    ]);
 
   return (
     <AppShell
@@ -29,11 +32,11 @@ export default async function AppLayout({
       userEmail={user.email}
       academicYears={academicYears}
       selectedAcademicYearId={selectedAcademicYear?.id ?? null}
-      sidebarSchoolName={sidebarSchoolName}
+      schools={schools}
+      selectedSchoolId={selectedSchool?.id ?? null}
       isTeacher={isTeacher}
     >
       {children}
     </AppShell>
   );
 }
-

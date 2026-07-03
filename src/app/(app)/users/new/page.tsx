@@ -7,6 +7,7 @@ import { createUser, getUserFormOptions } from "@/actions/users";
 import { UserForm } from "@/components/users/user-form";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import type { UserInput } from "@/lib/validations/user";
 
 export default function NewUserPage() {
   const router = useRouter();
@@ -22,9 +23,12 @@ export default function NewUserPage() {
     });
   }, []);
 
-  async function handleSubmit(data: Parameters<typeof createUser>[0]) {
+  async function handleSubmit(data: UserInput) {
     try {
-      const user = await createUser(data);
+      if (!data.password) {
+        throw new Error("Password is required");
+      }
+      const user = await createUser({ ...data, password: data.password });
       toast.success("User created");
       router.push(`/users/${user.id}`);
     } catch (error) {

@@ -25,9 +25,11 @@ export async function getSessionUser(): Promise<AuthUser | null> {
   const supabase = await createClient();
   const {
     data: { user },
+    error,
   } = await supabase.auth.getUser();
 
-  if (!user) return null;
+  // Invalid/expired refresh token — treat as signed out (middleware clears cookies).
+  if (error || !user) return null;
 
   const appUser = await prisma.appUser.findUnique({
     where: { id: user.id },

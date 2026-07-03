@@ -5,6 +5,8 @@ import { requireRole } from "@/lib/auth/session";
 import { getTeacherClassrooms } from "@/lib/auth/teacher-defaults";
 import { AttendanceEntry } from "@/components/attendance/attendance-entry";
 import { Skeleton } from "@/components/ui/skeleton";
+import { filterClassroomsForSelectedSchool } from "@/lib/school/filter-classrooms";
+import { getSelectedSchool } from "@/lib/school/resolve-school";
 
 type PageProps = {
   params: Promise<{ classroomId: string }>;
@@ -19,14 +21,32 @@ export default async function TeacherAttendanceClassPage({
   const { classroomId } = await params;
   const { day } = await searchParams;
 
-  const session = await getAttendanceSession(classroomId, day);
+  const [session, teacherClassrooms, selectedSchool] = await Promise.all([
+    getAttendanceSession(classroomId, day),
+    getTeacherClassrooms(user),
+    getSelectedSchool(user),
+  ]);
   if (!session) notFound();
+
+  if (selectedSchool && session.classroom.schoolId !== selectedSchool.id) {
+    redirect("/dashboard/teacher");
+  }
 
   if (!day && session.selectedDay?.id) {
     redirect(`/teacher/attendance/${classroomId}?day=${session.selectedDay.id}`);
   }
 
-  const teacherClassrooms = await getTeacherClassrooms(user);
+  const classroomOptions = filterClassroomsForSelectedSchool(
+    teacherClassrooms,
+    selectedSchool
+  ).map((c) => ({
+    id: c.id,
+    name: c.name,
+    schoolId: c.schoolId,
+    school: c.school,
+    grade: c.grade,
+    section: c.section,
+  }));
 
   return (
     <Suspense fallback={<Skeleton className="h-96 w-full" />}>
@@ -38,10 +58,7 @@ export default async function TeacherAttendanceClassPage({
         selectedDay={session.selectedDay ?? null}
         enrollments={session.enrollments}
         showBack={false}
-        classroomOptions={teacherClassrooms.map((c) => ({
-          id: c.id,
-          name: c.name,
-        }))}
+        classroomOptions={classroomOptions}
         classroomSwitcherBasePath="/teacher/attendance"
       />
     </Suspense>

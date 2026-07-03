@@ -1,6 +1,10 @@
 import { z } from "zod";
 import { GENDER_CODES } from "@/lib/setup-types";
-import { listPaginationSchema, optionalBooleanQuery } from "@/lib/validations/pagination";
+import {
+  emptyToUndefined,
+  listPaginationSchema,
+  optionalBooleanQuery,
+} from "@/lib/validations/pagination";
 
 export const teacherSchema = z.object({
   schoolId: z.string().uuid("School is required"),
@@ -19,8 +23,8 @@ export const teacherSchema = z.object({
 export type TeacherInput = z.infer<typeof teacherSchema>;
 
 export const teacherListSchema = listPaginationSchema.extend({
-  schoolId: z.string().uuid().optional(),
-  gender: z.enum(GENDER_CODES).optional(),
+  schoolId: emptyToUndefined(z.string().uuid().optional()),
+  gender: emptyToUndefined(z.enum(GENDER_CODES).optional()),
   isActive: optionalBooleanQuery,
 });
 

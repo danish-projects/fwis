@@ -1,5 +1,6 @@
 import type { AttendanceStatus, SessionType } from "@/lib/setup-types";
 import { isEditableAttendanceSessionType } from "@/lib/attendance/session-type-styles";
+import { isPastOrTodayCalendarDate } from "@/lib/calendar/calendar-date";
 import {
   calculateAttendancePercentage,
   countsAsPresent,
@@ -18,25 +19,14 @@ export type AttendanceWeekSummary = {
   pastEditableDays: ConsolidateCalendarDay[];
 };
 
-function startOfDayMs(date: Date): number {
-  const value = new Date(date);
-  value.setHours(0, 0, 0, 0);
-  return value.getTime();
-}
-
-function isPastOrToday(date: Date, todayMs: number): boolean {
-  return startOfDayMs(date) <= todayMs;
-}
-
 export function getAttendanceWeekSummary(
   calendarDays: ConsolidateCalendarDay[]
 ): AttendanceWeekSummary {
-  const todayMs = startOfDayMs(new Date());
   const editableDays = calendarDays.filter((day) =>
     isEditableAttendanceSessionType(day.sessionType)
   );
   const pastEditableDays = editableDays.filter((day) =>
-    isPastOrToday(day.date, todayMs)
+    isPastOrTodayCalendarDate(day.date)
   );
 
   return {

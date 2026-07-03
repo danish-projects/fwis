@@ -64,8 +64,8 @@ export const ConsolidateMatrixRow = memo(function ConsolidateMatrixRow({
 }: ConsolidateMatrixRowProps) {
   return (
     <tr className="border-b last:border-0">
-      <td className="sticky left-0 z-[1] border-r bg-muted px-2 py-1 shadow-[2px_0_4px_-2px_rgba(0,0,0,0.12)]">
-        <div className="font-medium">{studentName}</div>
+      <td className="sticky left-0 z-[1] min-w-[7.5rem] border-r bg-muted px-2 py-1 shadow-[2px_0_4px_-2px_rgba(0,0,0,0.12)] sm:min-w-[10rem]">
+        <div className="text-xs font-medium sm:text-sm">{studentName}</div>
         {studentNumber ? (
           <div className="font-mono text-[10px] text-muted-foreground">{studentNumber}</div>
         ) : null}
@@ -81,13 +81,13 @@ export const ConsolidateMatrixRow = memo(function ConsolidateMatrixRow({
         return (
           <td
             key={day.id}
-            className={`px-1 py-1 align-middle ${SESSION_TYPE_CELL_CLASSES[day.sessionType]}`}
+            className={`px-0.5 py-1 align-middle sm:px-1 ${SESSION_TYPE_CELL_CLASSES[day.sessionType]}`}
           >
             {!editable ? (
               <span className="block py-1 text-center text-muted-foreground">—</span>
             ) : canEdit ? (
               <select
-                className="h-8 w-full rounded border border-input bg-background px-0.5 text-center text-[11px] font-medium shadow-sm"
+                className="h-7 w-full min-w-0 rounded border border-input bg-background px-0.5 text-center text-[10px] font-medium shadow-sm sm:h-8 sm:text-[11px]"
                 value={status ?? ""}
                 onChange={(e) =>
                   onCellChange(
@@ -114,14 +114,14 @@ export const ConsolidateMatrixRow = memo(function ConsolidateMatrixRow({
           </td>
         );
       })}
-      <td className="sticky right-0 z-[1] border-l bg-muted px-2 py-2 text-center font-semibold shadow-[-2px_0_4px_-2px_rgba(0,0,0,0.12)]">
-        <div className="text-emerald-700 dark:text-emerald-400">
+      <td className="sticky right-0 z-[1] min-w-[4.5rem] border-l bg-muted px-1 py-1.5 text-center font-semibold shadow-[-2px_0_4px_-2px_rgba(0,0,0,0.12)] sm:min-w-[5.5rem] sm:px-2 sm:py-2">
+        <div className="text-[10px] text-emerald-700 dark:text-emerald-400 sm:text-xs">
           P: {present}
           {pastWeeks > 0 && (
             <span className="font-normal text-[10px]"> ({formatPercent(presentPct)})</span>
           )}
         </div>
-        <div className="text-red-700 dark:text-red-400">
+        <div className="text-[10px] text-red-700 dark:text-red-400 sm:text-xs">
           A: {absent}
           {pastWeeks > 0 && (
             <span className="font-normal text-[10px]"> ({formatPercent(absentPct)})</span>

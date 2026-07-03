@@ -16,6 +16,7 @@ import {
 } from "@/lib/attendance/session-type-styles";
 import { SESSION_TYPE_LABELS } from "@/lib/calendar/generate-sundays";
 import { ConsolidateMatrixRow } from "@/components/attendance/consolidate-matrix-row";
+import { WeekColumnFilterSelect } from "@/components/attendance/week-column-filter-select";
 import { useVirtualScroll } from "@/hooks/use-virtual-scroll";
 import { Button } from "@/components/ui/button";
 import { formatLessonPlanLabel } from "@/lib/calendar/lesson-plan";
@@ -24,6 +25,11 @@ import {
   getAttendanceWeekSummary,
   summarizeStudentAttendance,
 } from "@/lib/attendance/consolidate-attendance-stats";
+import {
+  ALL_WEEKS_VALUE,
+  filterCalendarDays,
+  type WeekColumnFilter,
+} from "@/lib/attendance/week-column-filter";
 
 export const ALL_CLASSROOMS_VALUE = "all";
 /** @deprecated Use ALL_CLASSROOMS_VALUE */
@@ -109,7 +115,17 @@ export function ConsolidateAttendanceMatrix({
   const scrollRef = useRef<HTMLDivElement>(null);
   const [isSaving, startSaveTransition] = useTransition();
   const [isLoading, startLoadTransition] = useTransition();
+  const [weekFilter, setWeekFilter] = useState<WeekColumnFilter>(ALL_WEEKS_VALUE);
   const showGradeColumn = classroomFilter === ALL_CLASSROOMS_VALUE;
+
+  const visibleCalendarDays = useMemo(
+    () => filterCalendarDays(calendarDays, weekFilter),
+    [calendarDays, weekFilter]
+  );
+
+  useEffect(() => {
+    setWeekFilter(ALL_WEEKS_VALUE);
+  }, [schoolId, classroomFilter, calendarDays.length]);
 
   const { startIndex, endIndex, paddingTop, paddingBottom } = useVirtualScroll(
     scrollRef,
@@ -283,6 +299,12 @@ export function ConsolidateAttendanceMatrix({
             ))}
           </select>
         </div>
+        <WeekColumnFilterSelect
+          weeks={calendarDays}
+          value={weekFilter}
+          onChange={setWeekFilter}
+          id="consolidateWeek"
+        />
       </div>
 
       {isLoading && (
@@ -336,27 +358,29 @@ export function ConsolidateAttendanceMatrix({
             </div>
           )}
           <div ref={scrollRef} className="min-h-0 flex-1 overflow-auto">
-            <table className="w-full min-w-[900px] border-collapse text-xs">
+            <table className="w-full max-w-full border-collapse text-xs">
             <thead>
               <tr>
-                <th className="sticky left-0 top-0 z-[4] min-w-[180px] border-b border-r bg-muted px-2 py-2 text-left font-medium shadow-[2px_0_4px_-2px_rgba(0,0,0,0.15)]">
+                <th className="sticky left-0 top-0 z-[4] min-w-[7.5rem] border-b border-r bg-muted px-2 py-2 text-left font-medium shadow-[2px_0_4px_-2px_rgba(0,0,0,0.15)] sm:min-w-[10rem]">
                   Student
                 </th>
-                {calendarDays.map((day) => (
+                {visibleCalendarDays.map((day) => (
                   <th
                     key={day.id}
-                    className={`sticky top-0 z-[3] min-w-[76px] border-b px-1 py-2 text-center font-semibold ${SESSION_TYPE_HEADER_CLASSES[day.sessionType]}`}
+                    className={`sticky top-0 z-[3] min-w-[3.25rem] border-b px-0.5 py-1.5 text-center font-semibold sm:min-w-[4.5rem] sm:px-1 sm:py-2 ${SESSION_TYPE_HEADER_CLASSES[day.sessionType]}`}
                     title={SESSION_TYPE_LABELS[day.sessionType]}
                   >
-                    <div>{formatLessonPlanLabel(day.lessonPlanNumber)}</div>
-                    <div className="text-[10px] font-normal opacity-90">
+                    <div className="text-[10px] sm:text-xs">
+                      {formatLessonPlanLabel(day.lessonPlanNumber)}
+                    </div>
+                    <div className="text-[9px] font-normal opacity-90 sm:text-[10px]">
                       {formatDate(day.date)}
                     </div>
                   </th>
                 ))}
-                <th className="sticky right-0 top-0 z-[4] min-w-[104px] border-b border-l bg-muted px-2 py-2 text-center font-semibold shadow-[-2px_0_4px_-2px_rgba(0,0,0,0.15)]">
-                  <div>Total</div>
-                  <div className="text-[10px] font-normal text-muted-foreground">
+                <th className="sticky right-0 top-0 z-[4] min-w-[4.5rem] border-b border-l bg-muted px-1 py-2 text-center font-semibold shadow-[-2px_0_4px_-2px_rgba(0,0,0,0.15)] sm:min-w-[5.5rem] sm:px-2">
+                  <div className="text-[10px] sm:text-xs">Total</div>
+                  <div className="text-[9px] font-normal text-muted-foreground sm:text-[10px]">
                     P% / A%
                   </div>
                 </th>
@@ -366,12 +390,13 @@ export function ConsolidateAttendanceMatrix({
               {paddingTop > 0 && (
                 <tr aria-hidden>
                   <td
-                    colSpan={calendarDays.length + 2}
+                    colSpan={visibleCalendarDays.length + 2}
                     style={{ height: paddingTop, padding: 0, border: 0 }}
                   />
                 </tr>
               )}
               {visibleStudents.map((student) => {
+                // Totals always use every week (full year data), not the week filter.
                 const totals = summarizeStudentAttendance(
                   calendarDays,
                   (dayId) =>
@@ -392,7 +417,7 @@ export function ConsolidateAttendanceMatrix({
                     gradeName={student.gradeName}
                     classroomName={student.classroomName}
                     showGradeColumn={showGradeColumn}
-                    calendarDays={calendarDays}
+                    calendarDays={visibleCalendarDays}
                     getStatus={(dayId) =>
                       cells.get(cellKey(student.enrollmentId, dayId))?.status ??
                       null
@@ -411,7 +436,7 @@ export function ConsolidateAttendanceMatrix({
               {paddingBottom > 0 && (
                 <tr aria-hidden>
                   <td
-                    colSpan={calendarDays.length + 2}
+                    colSpan={visibleCalendarDays.length + 2}
                     style={{ height: paddingBottom, padding: 0, border: 0 }}
                   />
                 </tr>

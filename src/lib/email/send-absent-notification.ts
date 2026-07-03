@@ -26,6 +26,7 @@ export async function sendAbsentNotification(
     year: "numeric",
     month: "long",
     day: "numeric",
+    timeZone: "UTC",
   });
 
   const greeting = input.parentName ? `Dear ${input.parentName},` : "Dear Parent/Guardian,";

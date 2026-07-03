@@ -226,17 +226,18 @@ export async function getStudentProfile(
         tardyPct: 0,
         attendancePct: 100,
       },
-      assessments: QUIZ_TYPES.map((type) => ({
-        type,
-        label: ASSESSMENT_TYPE_LABELS[type],
-        score: null,
-      })).concat([
+      assessments: [
+        ...QUIZ_TYPES.map((type) => ({
+          type: type as AssessmentType,
+          label: ASSESSMENT_TYPE_LABELS[type],
+          score: null as number | null,
+        })),
         {
           type: "FINAL_EXAM" as AssessmentType,
           label: ASSESSMENT_TYPE_LABELS.FINAL_EXAM,
           score: null,
         },
-      ]),
+      ],
       behavior: {
         rows: buildBehaviorRatingRows({}),
         ratingCount: 0,

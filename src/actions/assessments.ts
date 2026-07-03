@@ -20,9 +20,30 @@ import { calculateFinalPercentage, letterGrade } from "@/lib/grades/calculate-fi
 import { BehaviorCalculationService } from "@/lib/behavior";
 import { getGradingScale } from "@/lib/grades/get-grading-scale";
 import { getSelectedAcademicYear, resolveAcademicYearForSchool } from "@/lib/academic-year/resolve-year";
+import {
+  buildAssessmentColumnDates,
+  type AssessmentColumnDates,
+} from "@/lib/assessments/assessment-column-dates";
 import type { ScoreMatrixRow, TranscriptMatrixRow } from "@/lib/assessments/score-matrix-types";
+import { ASSESSMENT_TYPES } from "@/lib/validations/enrollment";
 
 export type { ScoreMatrixRow, TranscriptMatrixRow } from "@/lib/assessments/score-matrix-types";
+export type { AssessmentColumnDates } from "@/lib/assessments/assessment-column-dates";
+
+async function loadAssessmentColumnDates(
+  academicYearId: string
+): Promise<AssessmentColumnDates> {
+  const days = await prisma.academicCalendarDay.findMany({
+    where: {
+      academicYearId,
+      deletedAt: null,
+      sessionType: { in: [...ASSESSMENT_TYPES] },
+    },
+    orderBy: { date: "asc" },
+    select: { date: true, sessionType: true },
+  });
+  return buildAssessmentColumnDates(days);
+}
 
 async function getScoreMatrix(classroomId: string, academicYearId?: string) {
   const user = await requirePermission("assessments:read");
@@ -45,9 +66,16 @@ async function getScoreMatrix(classroomId: string, academicYearId?: string) {
     );
     yearId = schoolYear?.id;
   }
-  if (!yearId) return { classroom, academicYear: null, rows: [] as ScoreMatrixRow[] };
+  if (!yearId) {
+    return {
+      classroom,
+      academicYear: null,
+      rows: [] as ScoreMatrixRow[],
+      columnDates: {} as AssessmentColumnDates,
+    };
+  }
 
-  const [academicYear, enrollments] = await Promise.all([
+  const [academicYear, enrollments, columnDates] = await Promise.all([
     prisma.academicYear.findUnique({ where: { id: yearId } }),
     prisma.studentEnrollment.findMany({
       where: {
@@ -67,6 +95,7 @@ async function getScoreMatrix(classroomId: string, academicYearId?: string) {
       },
       orderBy: { student: { lastName: "asc" } },
     }),
+    loadAssessmentColumnDates(yearId),
   ]);
 
   const rows: ScoreMatrixRow[] = enrollments.map((e) => {
@@ -83,7 +112,7 @@ async function getScoreMatrix(classroomId: string, academicYearId?: string) {
     };
   });
 
-  return { classroom, academicYear, rows };
+  return { classroom, academicYear, rows, columnDates };
 }
 
 export async function getAssessmentMatrix(classroomId: string, academicYearId?: string) {
@@ -117,10 +146,11 @@ export async function getTranscriptMatrix(classroomId: string, academicYearId?: 
       academicYear: null,
       rows: [] as TranscriptMatrixRow[],
       gradingScale: await getGradingScale(),
+      columnDates: {} as AssessmentColumnDates,
     };
   }
 
-  const [academicYear, gradingScale, enrollments] = await Promise.all([
+  const [academicYear, gradingScale, enrollments, columnDates] = await Promise.all([
     prisma.academicYear.findUnique({ where: { id: yearId } }),
     getGradingScale(),
     prisma.studentEnrollment.findMany({
@@ -142,6 +172,7 @@ export async function getTranscriptMatrix(classroomId: string, academicYearId?: 
       },
       orderBy: { student: { lastName: "asc" } },
     }),
+    loadAssessmentColumnDates(yearId),
   ]);
 
   const needsCompute = enrollments.filter((e) => !e.finalGrade);
@@ -235,7 +266,7 @@ export async function getTranscriptMatrix(classroomId: string, academicYearId?: 
     };
   });
 
-  return { classroom, academicYear, rows, gradingScale };
+  return { classroom, academicYear, rows, gradingScale, columnDates };
 }
 
 export async function upsertAssessmentScore(data: AssessmentScoreInput) {

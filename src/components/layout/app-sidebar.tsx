@@ -27,10 +27,12 @@ import { useTheme } from "@/components/providers/theme-provider";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { AcademicYearSwitcher } from "@/components/layout/academic-year-switcher";
+import { SchoolSwitcher } from "@/components/layout/school-switcher";
 import { cn } from "@/lib/utils";
 import { isNavLinkActive } from "@/lib/auth/nav-active";
 import type { NavGroup } from "@/lib/auth/permissions";
 import type { AcademicYearSummary } from "@/lib/academic-year/constants";
+import type { SchoolSummary } from "@/lib/school/constants";
 
 const ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
   LayoutDashboard,
@@ -56,7 +58,8 @@ type AppSidebarProps = {
   userEmail: string;
   academicYears: AcademicYearSummary[];
   selectedAcademicYearId: string | null;
-  sidebarSchoolName?: string | null;
+  schools: SchoolSummary[];
+  selectedSchoolId: string | null;
   onSignOut: () => void;
 };
 
@@ -66,11 +69,12 @@ export function AppSidebar({
   userEmail,
   academicYears,
   selectedAcademicYearId,
-  sidebarSchoolName = null,
+  schools,
+  selectedSchoolId,
   onSignOut,
 }: AppSidebarProps) {
   const pathname = usePathname();
-  const { resolvedTheme, setTheme, mounted } = useTheme();
+  const { setTheme } = useTheme();
   const [open, setOpen] = useState(false);
   const allHrefs = navGroups.flatMap((group) => group.items.map((item) => item.href));
 
@@ -88,21 +92,16 @@ export function AppSidebar({
         </Link>
       </div>
 
-      {(sidebarSchoolName || academicYears.length > 0) && (
-        <div className="space-y-3 border-b pb-3">
-          {sidebarSchoolName && (
-            <div className="px-3 pt-3">
-              <p className="mb-1.5 flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
-                <School className="h-3.5 w-3.5" />
-                School
-              </p>
-              <p className="text-sm font-semibold leading-snug">{sidebarSchoolName}</p>
-            </div>
-          )}
+      {(schools.length > 0 || academicYears.length > 0) && (
+        <div className="space-y-0 border-b pt-3">
           <AcademicYearSwitcher
             years={academicYears}
             selectedYearId={selectedAcademicYearId}
-            className={sidebarSchoolName ? "pb-0" : undefined}
+            className={schools.length > 0 ? "pb-2" : undefined}
+          />
+          <SchoolSwitcher
+            schools={schools}
+            selectedSchoolId={selectedSchoolId}
           />
         </div>
       )}
@@ -149,22 +148,17 @@ export function AppSidebar({
             variant="outline"
             size="sm"
             className="flex-1"
-            onClick={() => setTheme(resolvedTheme === "dark" ? "light" : "dark")}
-            aria-label={
-              mounted
-                ? resolvedTheme === "dark"
-                  ? "Switch to light mode"
-                  : "Switch to dark mode"
-                : "Toggle theme"
-            }
+            onClick={() => {
+              const isDark =
+                typeof document !== "undefined" &&
+                document.documentElement.classList.contains("dark");
+              setTheme(isDark ? "light" : "dark");
+            }}
+            aria-label="Toggle theme"
           >
-            {!mounted ? (
-              <span className="block h-4 w-4" aria-hidden />
-            ) : resolvedTheme === "dark" ? (
-              <Sun className="h-4 w-4" />
-            ) : (
-              <Moon className="h-4 w-4" />
-            )}
+            {/* Both icons always render so SSR HTML matches hydration; CSS picks the active one. */}
+            <Sun className="hidden h-4 w-4 dark:block" aria-hidden />
+            <Moon className="block h-4 w-4 dark:hidden" aria-hidden />
           </Button>
           <Button variant="outline" size="sm" className="flex-1" onClick={onSignOut}>
             <LogOut className="h-4 w-4" />
