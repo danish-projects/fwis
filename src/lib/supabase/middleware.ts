@@ -1,6 +1,7 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import { supabaseCookieOptions } from "@/lib/security/cookie-options";
+import { publicUrl } from "@/lib/security/request-origin";
 
 export async function updateSession(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request });
@@ -40,8 +41,9 @@ export async function updateSession(request: NextRequest) {
     request.nextUrl.pathname.startsWith("/login") ||
     request.nextUrl.pathname.startsWith("/auth");
   const isPublicRoute = request.nextUrl.pathname === "/";
+  const isApiRoute = request.nextUrl.pathname.startsWith("/api/");
 
-  if (user && !isAuthRoute && !isPublicRoute) {
+  if (user && !isAuthRoute && !isPublicRoute && !isApiRoute) {
     const { data: appUser, error } = await supabase
       .from("app_users")
       .select("is_active")
@@ -50,24 +52,20 @@ export async function updateSession(request: NextRequest) {
 
     if (!error && appUser && !appUser.is_active) {
       await supabase.auth.signOut();
-      const url = request.nextUrl.clone();
-      url.pathname = "/login";
+      const url = publicUrl(request, "/login");
       url.searchParams.set("error", "inactive");
       return NextResponse.redirect(url);
     }
   }
 
-  if (!user && !isAuthRoute && !isPublicRoute) {
-    const url = request.nextUrl.clone();
-    url.pathname = "/login";
+  if (!user && !isAuthRoute && !isPublicRoute && !isApiRoute) {
+    const url = publicUrl(request, "/login");
     url.searchParams.set("redirect", request.nextUrl.pathname);
     return NextResponse.redirect(url);
   }
 
   if (user && isAuthRoute) {
-    const url = request.nextUrl.clone();
-    url.pathname = "/dashboard";
-    return NextResponse.redirect(url);
+    return NextResponse.redirect(publicUrl(request, "/dashboard"));
   }
 
   return supabaseResponse;

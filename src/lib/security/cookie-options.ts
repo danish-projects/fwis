@@ -1,7 +1,7 @@
 import type { CookieOptions } from "@supabase/ssr";
-import { isProduction } from "@/lib/security/env";
+import { isHttpsAppUrl } from "@/lib/security/env";
 
-const secure = isProduction();
+const secure = isHttpsAppUrl();
 
 /** Shared defaults for app-set cookies (academic year, etc.). */
 export function appCookieOptions(

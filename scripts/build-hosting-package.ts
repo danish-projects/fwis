@@ -35,12 +35,86 @@ function writeFile(relativePath: string, content: string) {
   fs.writeFileSync(target, content, "utf8");
 }
 
+/**
+ * Next.js standalone file tracing often copies only package.json stubs for pg
+ * sub-dependencies. Dashboard routes fail at runtime with 500 (Cannot find module
+ * pg-types/postgres-array/...). Copy complete packages from the dev tree instead.
+ */
+const PG_RUNTIME_PACKAGES = [
+  "pg-types",
+  "pg-int8",
+  "pg-pool",
+  "pg-protocol",
+  "pg-connection-string",
+  "pgpass",
+  "pg-cloudflare",
+  "postgres-array",
+  "postgres-bytea",
+  "postgres-date",
+  "postgres-interval",
+  "split2",
+  "xtend",
+];
+
+function resolvePackageDir(packageName: string): string | null {
+  const nested = path.join(ROOT, "node_modules", "pg", "node_modules", packageName);
+  if (fs.existsSync(nested)) return nested;
+
+  const topLevel = path.join(ROOT, "node_modules", packageName);
+  if (fs.existsSync(topLevel)) return topLevel;
+
+  return null;
+}
+
+function copyPgRuntimePackages() {
+  const destNodeModules = path.join(OUTPUT_DIR, "node_modules");
+  fs.mkdirSync(destNodeModules, { recursive: true });
+
+  for (const packageName of PG_RUNTIME_PACKAGES) {
+    const src = resolvePackageDir(packageName);
+    if (!src) continue;
+
+    const dest = path.join(destNodeModules, packageName);
+    fs.rmSync(dest, { recursive: true, force: true });
+    fs.cpSync(src, dest, { recursive: true });
+  }
+
+  console.log("  Copied complete pg runtime packages for standalone hosting");
+}
+
+/** Windows often locks hosting-build when a local server.js is still running. */
+function clearOutputDir() {
+  if (!fs.existsSync(OUTPUT_DIR)) return;
+
+  try {
+    fs.rmSync(OUTPUT_DIR, {
+      recursive: true,
+      force: true,
+      maxRetries: 3,
+      retryDelay: 300,
+    });
+    return;
+  } catch (err) {
+    const code = (err as NodeJS.ErrnoException).code;
+    if (code !== "EBUSY" && code !== "EPERM" && code !== "ENOTEMPTY") {
+      throw err;
+    }
+  }
+
+  const staleDir = `${OUTPUT_DIR}.old-${Date.now()}`;
+  fs.renameSync(OUTPUT_DIR, staleDir);
+  console.log(
+    `  Previous hosting-build was locked; moved to ${path.basename(staleDir)}`
+  );
+  console.log(
+    "  Tip: stop any local server.js from hosting-build before rebuilding."
+  );
+}
+
 function main() {
   console.log("FWIS hosting package build\n");
 
-  if (fs.existsSync(OUTPUT_DIR)) {
-    fs.rmSync(OUTPUT_DIR, { recursive: true, force: true });
-  }
+  clearOutputDir();
 
   run("npm run build");
 
@@ -54,6 +128,7 @@ function main() {
   copyDir(STANDALONE_DIR, OUTPUT_DIR);
   copyDir(path.join(ROOT, ".next", "static"), path.join(OUTPUT_DIR, ".next", "static"));
   copyDir(path.join(ROOT, "public"), path.join(OUTPUT_DIR, "public"));
+  copyPgRuntimePackages();
 
   if (fs.existsSync(path.join(ROOT, "src", "generated", "prisma"))) {
     copyDir(
@@ -90,6 +165,61 @@ set NODE_ENV=production
 if not defined PORT set PORT=3000
 if not defined HOSTNAME set HOSTNAME=0.0.0.0
 node server.js
+`
+  );
+
+  writeFile(
+    "web.config",
+    `<?xml version="1.0" encoding="UTF-8"?>
+<configuration>
+  <system.webServer>
+    <handlers>
+      <add name="httpPlatformHandler" path="*" verb="*" modules="httpPlatformHandler" />
+    </handlers>
+    <httpPlatform
+      processPath="node"
+      arguments="server.js"
+      startupTimeLimit="60"
+      startupRetryCount="3"
+      stdoutLogEnabled="true"
+      stdoutLogFile=".\\logs\\node-stdout.log">
+      <environmentVariables>
+        <environmentVariable name="PORT" value="%HTTP_PLATFORM_PORT%" />
+        <environmentVariable name="NODE_ENV" value="production" />
+        <!-- Add production secrets here (or use a .env file — see web.config.env.example): -->
+        <!-- <environmentVariable name="DATABASE_URL" value="..." /> -->
+        <!-- <environmentVariable name="DIRECT_URL" value="..." /> -->
+        <!-- <environmentVariable name="NEXT_PUBLIC_SUPABASE_URL" value="..." /> -->
+        <!-- <environmentVariable name="NEXT_PUBLIC_SUPABASE_ANON_KEY" value="..." /> -->
+        <!-- <environmentVariable name="SUPABASE_SERVICE_ROLE_KEY" value="..." /> -->
+        <!-- <environmentVariable name="NEXT_PUBLIC_APP_URL" value="http://razarajwani-001-site17.dtempurl.com" /> -->
+        <!-- <environmentVariable name="PII_ENCRYPTION_KEY" value="..." /> -->
+      </environmentVariables>
+    </httpPlatform>
+  </system.webServer>
+</configuration>
+`
+  );
+
+  writeFile(
+    "web.config.env.example",
+    `# SmarterASP.NET / IIS — copy values into web.config <environmentVariables>
+# or create a .env file next to server.js (SmarterASP Next.js guide supports .env).
+#
+# IMPORTANT: NEXT_PUBLIC_* vars are baked in at build time. Set them in .env.local
+# BEFORE running npm run build:hosting (especially NEXT_PUBLIC_APP_URL).
+
+DATABASE_URL=postgresql://...pooler...
+DIRECT_URL=postgresql://...direct...
+NEXT_PUBLIC_SUPABASE_URL=https://xxxx.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJ...
+SUPABASE_SERVICE_ROLE_KEY=eyJ...
+NEXT_PUBLIC_APP_URL=https://yourdomain.com
+PII_ENCRYPTION_KEY=base64-32-byte-key
+
+# Optional email notifications
+# RESEND_API_KEY=re_...
+# EMAIL_FROM=FWIS <notifications@yourdomain.com>
 `
   );
 
@@ -156,6 +286,55 @@ Optional: \`PORT\` (default 3000), \`HOSTNAME\` (default 0.0.0.0), \`RESEND_API_
 6. Run \`npm install\` is **not** required — dependencies are bundled in standalone output
 7. Click **Restart** after uploading a new build
 
+## SmarterASP.NET (Windows / IIS / FTP)
+
+This build includes \`web.config\` for IIS **httpPlatformHandler** (required on SmarterASP).
+
+### Before you build (on your PC)
+
+1. Create \`.env.local\` with Supabase credentials (see README).
+2. Set \`NEXT_PUBLIC_APP_URL=https://your-actual-domain.com\` — this is embedded at build time.
+3. Run \`npm run build:hosting\` on **Windows** (SmarterASP runs Windows; avoids SWC/native module mismatches).
+
+### Upload via FTP
+
+1. Upload \`hosting-build.zip\` to your site root, then unzip in **Control Panel → File Manager**,  
+   **or** upload the entire \`hosting-build/\` folder contents via FTP (FileZilla).
+2. Ensure these files are in the **site root** (same folder as \`web.config\`):
+   \`server.js\`, \`web.config\`, \`.next/\`, \`node_modules/\`, \`public/\`
+3. Create a \`logs/\` folder (for \`web.config\` stdout logging) if it does not exist.
+
+### Enable Node.js on SmarterASP
+
+1. Control Panel → your website → **Node.js App** (or enable Node.js for the folder).
+2. Confirm \`web.config\` points to \`server.js\` (already configured in this package).
+3. Add production environment variables:
+   - Edit \`web.config\` \`<environmentVariables>\` (see comments in file), **or**
+   - Place a \`.env\` file beside \`server.js\` (see \`web.config.env.example\`).
+
+### Database (Supabase — not on SmarterASP)
+
+PostgreSQL stays on **Supabase**. From your dev machine (with production \`DIRECT_URL\` in \`.env.local\`):
+
+\`\`\`bash
+npm run db:deploy
+\`\`\`
+
+Also run \`supabase/migrations/002_app_user_self_read.sql\` in Supabase SQL Editor if not done yet.
+
+### Troubleshooting
+
+| Issue | Fix |
+|-------|-----|
+| Blank page / 500 | Check \`logs/node-stdout.log\`; verify env vars in \`web.config\` or \`.env\` |
+| SWC / native module error | Rebuild on Windows, re-upload \`node_modules\` |
+| Auth redirect loops | \`NEXT_PUBLIC_APP_URL\` must match your live URL (rebuild if wrong) |
+| Redirect to \`localhost:PORT\` | IIS internal port — fixed in app; rebuild + set \`NEXT_PUBLIC_APP_URL\` to your public URL (http:// for dtempurl) |
+| DB connection errors | Use Supabase **session pooler** on port **5432** for \`DATABASE_URL\` (SmarterASP blocks 6543). SSL: relaxed by default for Supabase. |
+| Dashboard 500 after login | Rebuild with latest \`npm run build:hosting\` (pg deps fix). If still failing: DB SSL/port — see above; check \`logs/node-stdout.log\` |
+
+KB: [Next.js on SmarterASP](https://www.smarterasp.net/support/kb/a2233/how-to-publish-a-next_js-project-to-your-hosting-account.aspx)
+
 ## Updating
 
 1. Build locally: \`npm run build:hosting\`
@@ -167,11 +346,13 @@ Optional: \`PORT\` (default 3000), \`HOSTNAME\` (default 0.0.0.0), \`RESEND_API_
 | Path | Purpose |
 |------|---------|
 | \`server.js\` | Next.js standalone server entry |
+| \`web.config\` | IIS / SmarterASP httpPlatformHandler config |
 | \`.next/\` | Compiled app + static assets |
 | \`public/\` | Public static files |
 | \`prisma/\` | Schema and migrations |
 | \`src/generated/prisma/\` | Prisma client (if present) |
 | \`node_modules/\` | Minimal runtime dependencies |
+| \`web.config.env.example\` | Env var template for IIS / .env |
 
 Built: ${new Date().toISOString()}
 `

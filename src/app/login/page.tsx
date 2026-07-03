@@ -28,7 +28,15 @@ function LoginForm() {
       body: JSON.stringify({ email, password }),
     });
 
-    const payload = (await response.json()) as { error?: string };
+    const contentType = response.headers.get("content-type") ?? "";
+    let payload: { error?: string } = {};
+    if (contentType.includes("application/json")) {
+      payload = (await response.json()) as { error?: string };
+    } else if (!response.ok) {
+      toast.error("Sign in failed. Please try again.");
+      setLoading(false);
+      return;
+    }
 
     if (!response.ok) {
       if (response.status === 429) {

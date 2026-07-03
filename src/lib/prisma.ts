@@ -30,9 +30,9 @@ function createPgPoolConfig(rawUrl: string): PoolConfig {
   }
 
   const connectionString = stripSslQueryParams(rawUrl);
+  // Supabase pooler certs often fail strict verification on shared Windows hosts.
   const rejectUnauthorized =
-    process.env.NODE_ENV === "production" &&
-    process.env.DATABASE_SSL_REJECT_UNAUTHORIZED !== "false";
+    process.env.DATABASE_SSL_REJECT_UNAUTHORIZED === "true";
 
   return {
     connectionString,
