@@ -23,3 +23,15 @@ export function localTodayKey(): string {
 export function isPastOrTodayCalendarDate(date: Date | string): boolean {
   return calendarDateKey(date) <= localTodayKey();
 }
+
+/** Parse an HTML date input value (YYYY-MM-DD) as UTC midnight. */
+export function parseCalendarDateInput(value: string): Date {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value.trim());
+  if (!match) {
+    throw new Error("Invalid date format");
+  }
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  return new Date(Date.UTC(year, month - 1, day));
+}

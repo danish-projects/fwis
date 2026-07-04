@@ -20,6 +20,8 @@ const isProduction = process.env.NODE_ENV === "production";
 
 const nextConfig: NextConfig = {
   output: "standalone",
+  /** Do not send `X-Powered-By: Next.js` (reduces stack fingerprinting). */
+  poweredByHeader: false,
   outputFileTracingIncludes: {
     "/*": ["./src/generated/prisma/**/*"],
   },

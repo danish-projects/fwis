@@ -8,7 +8,15 @@ import { createAuditLog } from "@/lib/audit/create-audit-log";
 import { assertAcademicYearRecordAccess } from "@/lib/auth/academic-year-access";
 import { getSelectedAcademicYear, resolveAcademicYearForSchool } from "@/lib/academic-year/resolve-year";
 import { generateCalendarDaysForYear } from "@/lib/calendar/bootstrap-calendar-days";
+import { getSelectedSchool } from "@/lib/school/resolve-school";
+import {
+  calendarDateKey,
+  parseCalendarDateInput,
+} from "@/lib/calendar/calendar-date";
+import { SESSION_TYPE_LABELS } from "@/lib/calendar/generate-sundays";
 import { isAttendanceNeeded } from "@/lib/grades/attendance-percentage";
+import { asSessionType } from "@/lib/setup-types";
+import { formatDate } from "@/lib/utils";
 import {
   calendarDaySchema,
   calendarDayUpdateSchema,
@@ -40,46 +48,36 @@ export async function getCalendarDays(academicYearId: string) {
   return year;
 }
 
-export async function getCalendarPageContext(schoolId?: string) {
+export async function getCalendarPageContext() {
   const user = await requirePermission("calendar:read");
-  const selectedYear = await getSelectedAcademicYear(user);
+  const [selectedSchool, selectedYear] = await Promise.all([
+    getSelectedSchool(user),
+    getSelectedAcademicYear(user),
+  ]);
 
-  const schools = await prisma.school.findMany({
-    where: user.roles.includes("SUPER_ADMIN")
-      ? { deletedAt: null, isActive: true }
-      : { id: { in: user.schoolIds }, deletedAt: null, isActive: true },
-    orderBy: { name: "asc" },
-    select: { id: true, name: true },
-  });
-
-  const resolvedSchoolId =
-    schoolId && schools.some((s) => s.id === schoolId)
-      ? schoolId
-      : schools[0]?.id;
-
-  let academicYearId: string | null = null;
-  if (resolvedSchoolId) {
-    const schoolYear = await resolveAcademicYearForSchool(
-      resolvedSchoolId,
-      selectedYear
-    );
-    academicYearId = schoolYear?.id ?? null;
+  if (!selectedSchool) {
+    return {
+      schoolId: null,
+      academicYearId: null,
+      years: [] as Array<{ id: string; name: string; isActive: boolean }>,
+    };
   }
 
-  const years = resolvedSchoolId
-    ? await prisma.academicYear.findMany({
-        where: { schoolId: resolvedSchoolId, deletedAt: null },
-        orderBy: { startDate: "desc" },
-        select: { id: true, name: true, isActive: true },
-      })
-    : [];
+  const schoolYear = await resolveAcademicYearForSchool(
+    selectedSchool.id,
+    selectedYear
+  );
+
+  const years = await prisma.academicYear.findMany({
+    where: { schoolId: selectedSchool.id, deletedAt: null },
+    orderBy: { startDate: "desc" },
+    select: { id: true, name: true, isActive: true },
+  });
 
   return {
-    schools,
-    schoolId: resolvedSchoolId ?? null,
-    academicYearId,
+    schoolId: selectedSchool.id,
+    academicYearId: schoolYear?.id ?? null,
     years,
-    showSchoolPicker: user.roles.includes("SUPER_ADMIN"),
   };
 }
 
@@ -119,15 +117,38 @@ export async function createCalendarDay(data: CalendarDayInput) {
     parsed.academicYearId
   );
 
-  const date = new Date(parsed.date);
+  const year = await prisma.academicYear.findFirst({
+    where: { id: parsed.academicYearId, deletedAt: null },
+    select: { startDate: true, endDate: true },
+  });
+  if (!year) throw new Error("Academic year not found");
+
+  const date = parseCalendarDateInput(parsed.date);
+  const dateKey = calendarDateKey(date);
+  const startKey = calendarDateKey(year.startDate);
+  const endKey = calendarDateKey(year.endDate);
+  if (dateKey < startKey || dateKey > endKey) {
+    throw new Error(
+      `Date must fall within the academic year (${formatDate(year.startDate)} – ${formatDate(year.endDate)})`
+    );
+  }
+
   const existing = await prisma.academicCalendarDay.findFirst({
     where: {
       academicYearId: parsed.academicYearId,
       date,
       deletedAt: null,
     },
+    select: { sessionType: true },
   });
-  if (existing) throw new Error("A calendar day already exists for this date");
+  if (existing) {
+    const sessionLabel =
+      SESSION_TYPE_LABELS[asSessionType(existing.sessionType)] ??
+      existing.sessionType;
+    throw new Error(
+      `This date is already booked as ${sessionLabel}. Choose a different date or edit the existing calendar day.`
+    );
+  }
 
   const day = await prisma.academicCalendarDay.create({
     data: {

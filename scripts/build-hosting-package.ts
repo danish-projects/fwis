@@ -1,23 +1,98 @@
 /**
  * Builds FWIS and packages a deploy-ready folder for shared Node.js hosting.
  *
- * Usage: npm run build:hosting
+ * Usage:
+ *   npm run build:hosting -- stage
+ *   npm run build:hosting -- prod
+ *
+ * Requires a matching env file in the project root (e.g. .env.stage, .env.prod).
+ * That file is used for the Next.js build (NEXT_PUBLIC_*) and copied to
+ * hosting-build/.env for the server.
+ *
  * Output: hosting-build/
  */
 import { execSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
+import { config as loadDotenv } from "dotenv";
 
 const ROOT = process.cwd();
 const OUTPUT_DIR = path.join(ROOT, "hosting-build");
 const STANDALONE_DIR = path.join(ROOT, ".next", "standalone");
 
-function run(command: string) {
+const ENV_NAME_PATTERN = /^[a-zA-Z0-9][a-zA-Z0-9_-]*$/;
+
+function listHostingEnvFiles(): string[] {
+  return fs
+    .readdirSync(ROOT)
+    .filter((name) => {
+      if (!name.startsWith(".env.") || name === ".env.example") return false;
+      if (name.endsWith(".local") || name.endsWith(".example")) return false;
+      return fs.statSync(path.join(ROOT, name)).isFile();
+    })
+    .sort();
+}
+
+/**
+ * Resolve `stage` | `prod` (or any name) to `.env.<name>`.
+ * Exits without building when the argument is missing or the file is absent.
+ */
+function resolveHostingEnvFile(): { envName: string; envFilePath: string } {
+  const envName = process.argv[2]?.trim();
+  const available = listHostingEnvFiles();
+
+  if (!envName) {
+    console.error("Missing environment parameter.\n");
+    console.error("Usage: npm run build:hosting -- <env>");
+    console.error("Example: npm run build:hosting -- stage");
+    console.error("Example: npm run build:hosting -- prod\n");
+    if (available.length > 0) {
+      console.error("Available env files:");
+      for (const file of available) {
+        console.error(`  ${file}  →  npm run build:hosting -- ${file.slice(".env.".length)}`);
+      }
+    } else {
+      console.error("No .env.<name> files found (expected .env.stage, .env.prod, …).");
+    }
+    process.exit(1);
+  }
+
+  if (!ENV_NAME_PATTERN.test(envName)) {
+    console.error(
+      `Invalid environment name "${envName}". Use letters, numbers, _ or - only.`
+    );
+    process.exit(1);
+  }
+
+  const envFileName = `.env.${envName}`;
+  const envFilePath = path.join(ROOT, envFileName);
+
+  if (!fs.existsSync(envFilePath) || !fs.statSync(envFilePath).isFile()) {
+    console.error(`Environment file not found: ${envFileName}\n`);
+    console.error(`Input "${envName}" must match an existing file .env.${envName}.`);
+    if (available.length > 0) {
+      console.error("\nAvailable env files:");
+      for (const file of available) {
+        console.error(`  ${file}  →  npm run build:hosting -- ${file.slice(".env.".length)}`);
+      }
+    }
+    process.exit(1);
+  }
+
+  return { envName, envFilePath };
+}
+
+function run(command: string, extraEnv: NodeJS.ProcessEnv = {}) {
   console.log(`\n> ${command}\n`);
   execSync(command, {
     stdio: "inherit",
     cwd: ROOT,
-    env: { ...process.env, NODE_ENV: "production", FWIS_HOSTING_BUILD: "1" },
+    env: {
+      ...process.env,
+      ...extraEnv,
+      NODE_ENV: "production",
+      FWIS_HOSTING_BUILD: "1",
+    },
   });
 }
 
@@ -112,7 +187,18 @@ function clearOutputDir() {
 }
 
 function main() {
+  const { envName, envFilePath } = resolveHostingEnvFile();
+
   console.log("FWIS hosting package build\n");
+  console.log(`Environment: ${envName}`);
+  console.log(`Env file:     ${path.basename(envFilePath)}`);
+
+  // Load into this process so NEXT_PUBLIC_* are available to `next build`.
+  const loaded = loadDotenv({ path: envFilePath, override: true });
+  if (loaded.error) {
+    console.error(`Failed to load ${path.basename(envFilePath)}:`, loaded.error.message);
+    process.exit(1);
+  }
 
   clearOutputDir();
 
@@ -138,6 +224,10 @@ function main() {
   }
 
   copyDir(path.join(ROOT, "prisma"), path.join(OUTPUT_DIR, "prisma"));
+
+  // Runtime env for the server (SmartASP reads .env beside server.js).
+  fs.copyFileSync(envFilePath, path.join(OUTPUT_DIR, ".env"));
+  console.log(`  Copied ${path.basename(envFilePath)} → hosting-build/.env`);
 
   if (fs.existsSync(path.join(ROOT, ".env.example"))) {
     fs.copyFileSync(
@@ -173,6 +263,23 @@ node server.js
     `<?xml version="1.0" encoding="UTF-8"?>
 <configuration>
   <system.webServer>
+    <!-- Force HTTPS at IIS (do not rely on Node alone behind httpPlatformHandler). -->
+    <rewrite>
+      <rules>
+        <rule name="HTTP to HTTPS" stopProcessing="true">
+          <match url="(.*)" />
+          <conditions>
+            <add input="{HTTPS}" pattern="off" ignoreCase="true" />
+          </conditions>
+          <action type="Redirect" url="https://{HTTP_HOST}/{R:1}" redirectType="Permanent" />
+        </rule>
+      </rules>
+    </rewrite>
+    <httpProtocol>
+      <customHeaders>
+        <remove name="X-Powered-By" />
+      </customHeaders>
+    </httpProtocol>
     <handlers>
       <add name="httpPlatformHandler" path="*" verb="*" modules="httpPlatformHandler" />
     </handlers>
@@ -192,7 +299,7 @@ node server.js
         <!-- <environmentVariable name="NEXT_PUBLIC_SUPABASE_URL" value="..." /> -->
         <!-- <environmentVariable name="NEXT_PUBLIC_SUPABASE_ANON_KEY" value="..." /> -->
         <!-- <environmentVariable name="SUPABASE_SERVICE_ROLE_KEY" value="..." /> -->
-        <!-- <environmentVariable name="NEXT_PUBLIC_APP_URL" value="http://razarajwani-001-site17.dtempurl.com" /> -->
+        <!-- <environmentVariable name="NEXT_PUBLIC_APP_URL" value="https://fwis-stage.codewithraza.com" /> -->
         <!-- <environmentVariable name="PII_ENCRYPTION_KEY" value="..." /> -->
       </environmentVariables>
     </httpPlatform>
@@ -214,7 +321,8 @@ DIRECT_URL=postgresql://...direct...
 NEXT_PUBLIC_SUPABASE_URL=https://xxxx.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJ...
 SUPABASE_SERVICE_ROLE_KEY=eyJ...
-NEXT_PUBLIC_APP_URL=https://yourdomain.com
+# Must be https:// for Secure cookies and HSTS-related app behavior
+NEXT_PUBLIC_APP_URL=https://fwis-stage.codewithraza.com
 PII_ENCRYPTION_KEY=base64-32-byte-key
 
 # Optional email notifications
@@ -292,9 +400,16 @@ This build includes \`web.config\` for IIS **httpPlatformHandler** (required on 
 
 ### Before you build (on your PC)
 
-1. Create \`.env.local\` with Supabase credentials (see README).
-2. Set \`NEXT_PUBLIC_APP_URL=https://your-actual-domain.com\` — this is embedded at build time.
-3. Run \`npm run build:hosting\` on **Windows** (SmarterASP runs Windows; avoids SWC/native module mismatches).
+1. Create \`.env.stage\` and/or \`.env.prod\` with full credentials (see \`.env.example\`).
+2. Set \`NEXT_PUBLIC_APP_URL=https://your-actual-domain.com\` in that file — embedded at build time.
+3. Run on **Windows** (SmarterASP runs Windows; avoids SWC/native module mismatches):
+
+\`\`\`bash
+npm run build:hosting -- stage   # uses .env.stage → hosting-build/.env
+npm run build:hosting -- prod    # uses .env.prod  → hosting-build/.env
+\`\`\`
+
+The script exits without building if the name does not match an existing \`.env.<name>\` file.
 
 ### Upload via FTP
 
@@ -329,7 +444,9 @@ Also run \`supabase/migrations/002_app_user_self_read.sql\` in Supabase SQL Edit
 | Blank page / 500 | Check \`logs/node-stdout.log\`; verify env vars in \`web.config\` or \`.env\` |
 | SWC / native module error | Rebuild on Windows, re-upload \`node_modules\` |
 | Auth redirect loops | \`NEXT_PUBLIC_APP_URL\` must match your live URL (rebuild if wrong) |
-| Redirect to \`localhost:PORT\` | IIS internal port — fixed in app; rebuild + set \`NEXT_PUBLIC_APP_URL\` to your public URL (http:// for dtempurl) |
+| HTTP not redirecting to HTTPS | Ensure \`web.config\` has the HTTP→HTTPS rewrite rule; URL Rewrite module must be enabled on IIS |
+| \`X-Powered-By\` still present | Redeploy latest \`web.config\` (removes ASP.NET header); Next.js header is disabled via \`poweredByHeader: false\` |
+| Redirect to \`localhost:PORT\` | IIS internal port — fixed in app; rebuild + set \`NEXT_PUBLIC_APP_URL\` to your public **https://** URL |
 | DB connection errors | Use Supabase **session pooler** on port **5432** for \`DATABASE_URL\` (SmarterASP blocks 6543). SSL: relaxed by default for Supabase. |
 | Dashboard 500 after login | Rebuild with latest \`npm run build:hosting\` (pg deps fix). If still failing: DB SSL/port — see above; check \`logs/node-stdout.log\` |
 
@@ -337,8 +454,8 @@ KB: [Next.js on SmarterASP](https://www.smarterasp.net/support/kb/a2233/how-to-p
 
 ## Updating
 
-1. Build locally: \`npm run build:hosting\`
-2. Upload the new \`hosting-build\` contents (replace files)
+1. Build locally: \`npm run build:hosting -- stage\` (or \`prod\`)
+2. Upload the new \`hosting-build\` contents (replace files), including \`.env\`
 3. Restart the Node.js app on the host
 
 ## Folder contents
@@ -353,8 +470,9 @@ KB: [Next.js on SmarterASP](https://www.smarterasp.net/support/kb/a2233/how-to-p
 | \`src/generated/prisma/\` | Prisma client (if present) |
 | \`node_modules/\` | Minimal runtime dependencies |
 | \`web.config.env.example\` | Env var template for IIS / .env |
+| \`.env\` | Copied from \`.env.${envName}\` at build time |
 
-Built: ${new Date().toISOString()}
+Built: ${new Date().toISOString()} (env: ${envName})
 `
   );
 
@@ -380,12 +498,12 @@ Built: ${new Date().toISOString()}
 
   console.log("\nHosting package ready:");
   console.log(`  ${OUTPUT_DIR}`);
+  console.log(`  Environment: ${envName} (from ${path.basename(envFilePath)})`);
   console.log(`  Approx. size: ${sizeMb} MB`);
   console.log("\nNext steps:");
-  console.log("  1. Upload hosting-build/ to your server");
-  console.log("  2. Configure .env (see .env.production.example)");
-  console.log("  3. Run ./start.sh or point Node app to server.js");
-  console.log("  4. See HOSTING.md for cPanel / shared hosting details");
+  console.log("  1. Upload hosting-build/ to your server (includes .env)");
+  console.log("  2. Run ./start.sh or point Node app to server.js");
+  console.log("  3. See HOSTING.md for cPanel / shared hosting details");
 
   const zipPath = path.join(ROOT, "hosting-build.zip");
   try {
@@ -415,4 +533,9 @@ function getDirSize(dir: string): number {
   return total;
 }
 
-main();
+try {
+  main();
+} catch (error) {
+  console.error(error instanceof Error ? error.message : error);
+  process.exit(1);
+}

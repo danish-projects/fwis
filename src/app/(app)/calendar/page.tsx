@@ -19,7 +19,7 @@ import { formatDate } from "@/lib/utils";
 export const metadata = { title: "Academic Calendar" };
 
 type PageProps = {
-  searchParams: Promise<{ school?: string; year?: string }>;
+  searchParams: Promise<{ year?: string }>;
 };
 
 export default async function CalendarPage({ searchParams }: PageProps) {
@@ -29,7 +29,7 @@ export default async function CalendarPage({ searchParams }: PageProps) {
   const canCreate = user && hasPermission(user.roles, "calendar:create");
 
   const params = await searchParams;
-  const ctx = await getCalendarPageContext(params.school);
+  const ctx = await getCalendarPageContext();
 
   const academicYearId =
     params.year && ctx.years.some((y) => y.id === params.year)
@@ -69,7 +69,16 @@ export default async function CalendarPage({ searchParams }: PageProps) {
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
-          {canCreate && <CalendarBulkGenerate academicYearId={academicYearId} />}
+          {canCreate && (
+            <>
+              <Button asChild size="sm">
+                <Link href={`/calendar/new?year=${academicYearId}`}>
+                  Add Day
+                </Link>
+              </Button>
+              <CalendarBulkGenerate academicYearId={academicYearId} />
+            </>
+          )}
           <Button asChild variant="outline" size="sm">
             <Link href="/academic-years">Manage Years</Link>
           </Button>
@@ -79,22 +88,6 @@ export default async function CalendarPage({ searchParams }: PageProps) {
       <Card>
         <CardHeader>
           <form className="flex flex-col gap-3 sm:flex-row sm:items-end">
-            {ctx.showSchoolPicker && (
-              <div className="space-y-1">
-                <label className="text-xs font-medium text-muted-foreground">School</label>
-                <select
-                  name="school"
-                  defaultValue={ctx.schoolId ?? ""}
-                  className="h-10 rounded-md border border-input bg-background px-3 text-sm"
-                >
-                  {ctx.schools.map((s) => (
-                    <option key={s.id} value={s.id}>
-                      {s.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            )}
             <div className="space-y-1">
               <label className="text-xs font-medium text-muted-foreground">Academic Year</label>
               <select
@@ -167,7 +160,7 @@ export default async function CalendarPage({ searchParams }: PageProps) {
                       colSpan={canUpdate ? 6 : 5}
                       className="py-8 text-center text-muted-foreground"
                     >
-                      No calendar days yet. Use &quot;Generate Sundays&quot; to create them.
+                      No calendar days yet. Use &quot;Add Day&quot; or &quot;Generate Sundays&quot; to create them.
                     </td>
                   </tr>
                 )}

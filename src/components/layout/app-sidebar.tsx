@@ -20,6 +20,7 @@ import {
   Shield,
   Sun,
   Table2,
+  Trophy,
   UserPlus,
   Users,
 } from "lucide-react";
@@ -50,6 +51,7 @@ const ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
   ClipboardCheck,
   Download,
   Table2,
+  Trophy,
 };
 
 type AppSidebarProps = {

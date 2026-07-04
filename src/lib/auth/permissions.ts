@@ -336,6 +336,13 @@ const CLASSROOM_NAV: NavItem[] = [
     permissions: ["assessments:read"],
     roles: ["SUPER_ADMIN", "SCHOOL_ADMIN", "READ_ONLY"],
   },
+  {
+    title: "Rankings",
+    href: "/rankings",
+    icon: "Trophy",
+    permissions: ["assessments:read"],
+    roles: ["SUPER_ADMIN", "SCHOOL_ADMIN", "READ_ONLY"],
+  },
 ];
 
 const ADMIN_NAV: NavItem[] = [

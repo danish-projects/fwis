@@ -45,17 +45,19 @@ cp .env.example .env.local
 
 Fill in your Supabase credentials:
 
-| Variable | Description |
-|----------|-------------|
-| `DATABASE_URL` | Supabase pooler connection string |
-| `DIRECT_URL` | Supabase direct connection (for migrations) |
-| `NEXT_PUBLIC_SUPABASE_URL` | Supabase project URL |
-| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Supabase anon key |
-| `SUPABASE_SERVICE_ROLE_KEY` | Service role key (server only) |
+
+| Variable                        | Description                                 |
+| ------------------------------- | ------------------------------------------- |
+| `DATABASE_URL`                  | Supabase pooler connection string           |
+| `DIRECT_URL`                    | Supabase direct connection (for migrations) |
+| `NEXT_PUBLIC_SUPABASE_URL`      | Supabase project URL                        |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Supabase anon key                           |
+| `SUPABASE_SERVICE_ROLE_KEY`     | Service role key (server only)              |
+
 
 ### 3. Database
 
-Use the npm scripts (recommended) or plain Prisma CLI — both load **`.env.local`** via `prisma.config.ts`. You need **`DATABASE_URL`** and **`DIRECT_URL`** (see `.env.example`).
+Use the npm scripts (recommended) or plain Prisma CLI — both load `**.env.local**` via `prisma.config.ts`. You need `**DATABASE_URL**` and `**DIRECT_URL**` (see `.env.example`).
 
 ```bash
 npm run db:deploy    # apply pending migrations (production/CI)
@@ -89,13 +91,15 @@ npm run setup
 
 Or create users manually in Supabase Auth — user UUIDs must match the seed.
 
-| Role | Email | Password | Landing page |
-|------|-------|----------|--------------|
-| Super Admin | `superadmin@fwis.org` | `FwisAdmin786!` | `/dashboard/super-admin` |
-| School Admin (Houston, all sections) | `admin.houston@fwis.org` | `FwisAdmin786!` | `/dashboard/school-admin` |
-| Boys Admin (Houston) | `admin.m.houston@fwis.org` | `FwisAdmin786!` | `/dashboard/school-admin` |
-| Girls Admin (Houston) | `admin.f.houston@fwis.org` | `FwisAdmin786!` | `/dashboard/school-admin` |
-| Teacher (Houston, Grade 1 Boys) | `grade1.boys.houston@fwis.org` | `FwisTeacher786!` | `/dashboard/teacher` |
+
+| Role                                 | Email                          | Password          | Landing page              |
+| ------------------------------------ | ------------------------------ | ----------------- | ------------------------- |
+| Super Admin                          | `superadmin@fwis.org`          | `FwisAdmin786!`   | `/dashboard/super-admin`  |
+| School Admin (Houston, all sections) | `admin.houston@fwis.org`       | `FwisAdmin786!`   | `/dashboard/school-admin` |
+| Boys Admin (Houston)                 | `admin.m.houston@fwis.org`     | `FwisAdmin786!`   | `/dashboard/school-admin` |
+| Girls Admin (Houston)                | `admin.f.houston@fwis.org`     | `FwisAdmin786!`   | `/dashboard/school-admin` |
+| Teacher (Houston, Grade 1 Boys)      | `grade1.boys.houston@fwis.org` | `FwisTeacher786!` | `/dashboard/teacher`      |
+
 
 Each school also has `admin.m.{city}@fwis.org` (Boys) and `admin.f.{city}@fwis.org` (Girls), e.g. `admin.m.chicago@fwis.org`. City slugs: `houston`, `chicago`, `newyork`, `dallas`, `atlanta`.
 
@@ -155,19 +159,21 @@ supabase/
 
 ## Role Landing Pages
 
-| Role | Default Route |
-|------|---------------|
-| Super Admin | `/dashboard/super-admin` |
+
+| Role         | Default Route             |
+| ------------ | ------------------------- |
+| Super Admin  | `/dashboard/super-admin`  |
 | School Admin | `/dashboard/school-admin` |
-| Teacher | `/dashboard/teacher` |
-| Read Only | `/dashboard/read-only` |
+| Teacher      | `/dashboard/teacher`      |
+| Read Only    | `/dashboard/read-only`    |
+
 
 ## Deploy to Vercel
 
 1. Push to GitHub
 2. Import project in Vercel
 3. Add environment variables from `.env.example`
-4. Set **`NEXT_PUBLIC_APP_URL`** to your production URL with **`https://`** (e.g. `https://fwis.yourdomain.com`)
+4. Set `**NEXT_PUBLIC_APP_URL**` to your production URL with `**https://**` (e.g. `https://fwis.yourdomain.com`)
 5. Add build command: `prisma generate && next build`
 6. Run `npx prisma migrate deploy` against production DB
 
@@ -175,13 +181,15 @@ supabase/
 
 ## Grade Weights
 
-| Component | Weight |
-|-----------|--------|
-| Attendance | 10% |
-| Behavior | 10% |
-| Quiz 1–5 | 5% each |
-| Midterm Project | 15% |
-| Final Exam | 40% |
+
+| Component       | Weight  |
+| --------------- | ------- |
+| Attendance      | 10%     |
+| Behavior        | 10%     |
+| Quiz 1–5        | 5% each |
+| Midterm Project | 15%     |
+| Final Exam      | 40%     |
+
 
 ## License
 
