@@ -6,6 +6,7 @@ import { requirePermission } from "@/lib/auth/session";
 import { createAuditLog } from "@/lib/audit/create-audit-log";
 import { schoolSchema, schoolListSchema, type SchoolInput } from "@/lib/validations/school";
 import { deriveCityCode } from "@/lib/students/student-number";
+import { formatSchoolCode } from "@/lib/school/format-school-code";
 
 function resolveCityCode(data: SchoolInput, existingCode?: string | null) {
   if (data.cityCode) return data.cityCode;
@@ -21,6 +22,7 @@ export async function createSchool(data: SchoolInput) {
   const school = await prisma.school.create({
     data: {
       ...parsed,
+      code: formatSchoolCode(cityCode),
       cityCode,
       email: parsed.email || null,
     },
@@ -52,6 +54,7 @@ export async function updateSchool(id: string, data: SchoolInput) {
     where: { id },
     data: {
       ...parsed,
+      code: formatSchoolCode(cityCode),
       cityCode,
       email: parsed.email || null,
     },

@@ -105,7 +105,7 @@ async function pickEnrollment(
     },
     include: {
       school: { select: { name: true } },
-      academicYear: { select: { id: true, name: true } },
+      academicYearSchool: { include: { academicYear: { select: { id: true, name: true } } } },
       classroom: { select: { name: true, grade: { select: { name: true } } } },
       teacher: { select: { firstName: true, lastName: true } },
       attendance: {
@@ -128,7 +128,9 @@ async function pickEnrollment(
   if (enrollments.length === 0) return null;
 
   if (requestedYearId) {
-    const direct = enrollments.find((e) => e.academicYearId === requestedYearId);
+    const direct = enrollments.find(
+      (e) => e.academicYearSchool.academicYear.id === requestedYearId
+    );
     if (direct) return direct;
 
     const requestedYear = await prisma.academicYear.findFirst({
@@ -137,7 +139,7 @@ async function pickEnrollment(
     });
     if (requestedYear) {
       const byName = enrollments.find(
-        (e) => e.academicYear.name === requestedYear.name
+        (e) => e.academicYearSchool.academicYear.name === requestedYear.name
       );
       if (byName) return byName;
     }
@@ -146,7 +148,7 @@ async function pickEnrollment(
   const selected = await getSelectedAcademicYear(user);
   if (selected) {
     const bySelected = enrollments.find(
-      (e) => e.academicYear.name === selected.name
+      (e) => e.academicYearSchool.academicYear.name === selected.name
     );
     if (bySelected) return bySelected;
   }
@@ -176,8 +178,8 @@ export async function getStudentProfile(
     where: { studentId, deletedAt: null, ...scope },
     select: {
       id: true,
-      academicYearId: true,
-      academicYear: { select: { name: true } },
+      academicYearSchoolId: true,
+      academicYearSchool: { select: { academicYear: { select: { id: true, name: true } } } },
     },
     orderBy: { enrollmentDate: "desc" },
   });
@@ -185,11 +187,11 @@ export async function getStudentProfile(
   const yearOptions: StudentProfileYearOption[] = [];
   const seenYears = new Set<string>();
   for (const e of allEnrollments) {
-    if (seenYears.has(e.academicYear.name)) continue;
-    seenYears.add(e.academicYear.name);
+    if (seenYears.has(e.academicYearSchool.academicYear.name)) continue;
+    seenYears.add(e.academicYearSchool.academicYear.name);
     yearOptions.push({
-      academicYearId: e.academicYearId,
-      name: e.academicYear.name,
+      academicYearId: e.academicYearSchool.academicYear.id,
+      name: e.academicYearSchool.academicYear.name,
       enrollmentId: e.id,
     });
   }
@@ -266,7 +268,7 @@ export async function getStudentProfile(
   const [calendarDays, scale] = await Promise.all([
     prisma.academicCalendarDay.findMany({
       where: {
-        academicYearId: enrollment.academicYearId,
+        academicYearSchoolId: enrollment.academicYearSchoolId,
         deletedAt: null,
       },
       select: { id: true, sessionType: true },
@@ -357,7 +359,7 @@ export async function getStudentProfile(
       isActive: student.isActive,
     },
     yearOptions,
-    selectedYearId: enrollment.academicYearId,
+    selectedYearId: enrollment.academicYearSchool.academicYear.id,
     enrollment: {
       id: enrollment.id,
       status: enrollment.status,
@@ -367,7 +369,7 @@ export async function getStudentProfile(
       teacherName: enrollment.teacher
         ? `${enrollment.teacher.firstName} ${enrollment.teacher.lastName}`
         : null,
-      academicYearName: enrollment.academicYear.name,
+      academicYearName: enrollment.academicYearSchool.academicYear.name,
     },
     attendance: {
       present,

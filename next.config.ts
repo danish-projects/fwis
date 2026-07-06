@@ -23,7 +23,11 @@ const nextConfig: NextConfig = {
   /** Do not send `X-Powered-By: Next.js` (reduces stack fingerprinting). */
   poweredByHeader: false,
   outputFileTracingIncludes: {
-    "/*": ["./src/generated/prisma/**/*"],
+    "/*": [
+      "./src/generated/prisma/**/*",
+      "./public/certificates/**/*",
+      "./src/assets/rankings/**/*",
+    ],
   },
   typescript: {
     ignoreBuildErrors: process.env.FWIS_HOSTING_BUILD === "1",

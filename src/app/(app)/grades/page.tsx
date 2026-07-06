@@ -3,6 +3,7 @@ import { Plus, Search } from "lucide-react";
 import { getGradeRecords } from "@/actions/grades";
 import { getSessionUser, requirePermission } from "@/lib/auth/session";
 import { hasPermission } from "@/lib/auth/permissions";
+import { getSelectedSchool } from "@/lib/school/resolve-school";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
@@ -11,13 +12,14 @@ import { Input } from "@/components/ui/input";
 export const metadata = { title: "Grades" };
 
 type PageProps = {
-  searchParams: Promise<{ page?: string; search?: string; schoolId?: string }>;
+  searchParams: Promise<{ page?: string; search?: string }>;
 };
 
 export default async function GradesPage({ searchParams }: PageProps) {
   await requirePermission("classrooms:read");
   const user = await getSessionUser();
   const canCreate = user && hasPermission(user.roles, "classrooms:create");
+  const selectedSchool = user ? await getSelectedSchool(user) : null;
 
   const params = await searchParams;
   const page = Number(params.page) || 1;
@@ -25,7 +27,6 @@ export default async function GradesPage({ searchParams }: PageProps) {
   const { data: grades, meta } = await getGradeRecords({
     page,
     search: params.search,
-    schoolId: params.schoolId,
   });
 
   return (
@@ -35,6 +36,7 @@ export default async function GradesPage({ searchParams }: PageProps) {
           <h1 className="text-2xl font-bold md:text-3xl">Grades</h1>
           <p className="text-muted-foreground">
             Manage grade levels (Grade 1–6 Boys and Girls) per school
+            {selectedSchool ? ` · ${selectedSchool.name}` : ""}
           </p>
         </div>
         {canCreate && (
@@ -116,7 +118,9 @@ export default async function GradesPage({ searchParams }: PageProps) {
                 {grades.length === 0 && (
                   <tr>
                     <td colSpan={8} className="py-8 text-center text-muted-foreground">
-                      No grades found.
+                      {selectedSchool
+                        ? "No grades found for this school."
+                        : "Select a school to view grades."}
                     </td>
                   </tr>
                 )}

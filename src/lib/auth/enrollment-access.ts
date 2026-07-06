@@ -18,15 +18,15 @@ export async function assertEnrollmentInScope(
 export async function assertCalendarDayInSchool(
   calendarDayId: string,
   schoolId: string
-): Promise<{ id: string; academicYearId: string }> {
+): Promise<{ id: string; academicYearSchoolId: string }> {
   const { prisma } = await import("@/lib/prisma");
   const day = await prisma.academicCalendarDay.findFirst({
     where: {
       id: calendarDayId,
       deletedAt: null,
-      academicYear: { schoolId, deletedAt: null },
+      academicYearSchool: { schoolId, deletedAt: null },
     },
-    select: { id: true, academicYearId: true },
+    select: { id: true, academicYearSchoolId: true },
   });
   if (!day) {
     throw new Error("Calendar day does not belong to this school");
@@ -69,7 +69,7 @@ export function buildEnrollmentListFilter(
   options?: {
     search?: string;
     schoolId?: string;
-    academicYearId?: string;
+    academicYearSchoolId?: string;
     academicYearName?: string;
     classroomId?: string;
     status?: string;
@@ -78,9 +78,16 @@ export function buildEnrollmentListFilter(
   const base: Prisma.StudentEnrollmentWhereInput = {
     deletedAt: null,
     ...(options?.schoolId ? { schoolId: options.schoolId } : {}),
-    ...(options?.academicYearId ? { academicYearId: options.academicYearId } : {}),
+    ...(options?.academicYearSchoolId
+      ? { academicYearSchoolId: options.academicYearSchoolId }
+      : {}),
     ...(options?.academicYearName
-      ? { academicYear: { name: options.academicYearName, deletedAt: null } }
+      ? {
+          academicYearSchool: {
+            academicYear: { name: options.academicYearName, deletedAt: null },
+            deletedAt: null,
+          },
+        }
       : {}),
     ...(options?.classroomId ? { classroomId: options.classroomId } : {}),
     ...(options?.status

@@ -32,11 +32,23 @@ export async function getSchoolBackupPageContext(schoolId?: string) {
       : schools[0]?.id;
 
   const academicYears = resolvedSchoolId
-    ? await prisma.academicYear.findMany({
+    ? await prisma.academicYearSchool.findMany({
         where: { schoolId: resolvedSchoolId, deletedAt: null },
-        orderBy: { startDate: "desc" },
-        select: { id: true, name: true, isActive: true, startDate: true, endDate: true },
-      })
+        orderBy: { academicYear: { startDate: "desc" } },
+        include: {
+          academicYear: {
+            select: { id: true, name: true, startDate: true, endDate: true },
+          },
+        },
+      }).then((links) =>
+        links.map((link) => ({
+          id: link.academicYear.id,
+          name: link.academicYear.name,
+          isActive: link.isActive,
+          startDate: link.academicYear.startDate,
+          endDate: link.academicYear.endDate,
+        }))
+      )
     : [];
 
   return {
@@ -54,24 +66,27 @@ export async function buildSchoolYearBackupBuffer(
   await requirePermission("reports:export", { schoolId: input.schoolId });
   await assertAcademicYearRecordAccess(user, input.yearId);
 
-  const year = await prisma.academicYear.findFirst({
+  const schoolLink = await prisma.academicYearSchool.findFirst({
     where: {
-      id: input.yearId,
+      academicYearId: input.yearId,
       schoolId: input.schoolId,
       deletedAt: null,
     },
     include: {
+      academicYear: true,
       school: true,
     },
   });
 
-  if (!year) {
+  if (!schoolLink) {
     throw new Error("Academic year not found for this school.");
   }
 
+  const year = schoolLink.academicYear;
+
   const scope = {
-    city: year.school.city,
-    state: year.school.state,
+    city: schoolLink.school.city,
+    state: schoolLink.school.state,
     academicYear: year.name,
   };
 
@@ -105,7 +120,7 @@ export async function buildSchoolYearBackupBuffer(
   const enrollments = await prisma.studentEnrollment.findMany({
     where: {
       schoolId: input.schoolId,
-      academicYearId: input.yearId,
+      academicYearSchoolId: schoolLink.id,
       deletedAt: null,
     },
     include: {
@@ -188,7 +203,7 @@ export async function buildSchoolYearBackupBuffer(
   }
 
   const calendarDays = await prisma.academicCalendarDay.findMany({
-    where: { academicYearId: input.yearId, deletedAt: null },
+    where: { academicYearSchoolId: schoolLink.id, deletedAt: null },
     orderBy: { date: "asc" },
     select: { date: true, sessionType: true, lessonPlanNumber: true },
   });
@@ -200,7 +215,7 @@ export async function buildSchoolYearBackupBuffer(
   }));
 
   const backupData: SchoolYearBackupData = {
-    schoolName: year.school.name,
+    schoolName: schoolLink.school.name,
     city: scope.city,
     state: scope.state,
     academicYear: scope.academicYear,

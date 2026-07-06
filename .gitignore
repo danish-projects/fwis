@@ -20,7 +20,9 @@
 # production
 /build
 /hosting-build
-/hosting-build.zip
+/hosting-build-*
+/hosting-build*.zip
+/hosting-build-*.old-*
 
 # misc
 .DS_Store

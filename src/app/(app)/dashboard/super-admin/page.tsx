@@ -21,7 +21,12 @@ export default async function SuperAdminDashboardPage() {
   const selectedYear = user ? await getSelectedAcademicYear(user) : null;
 
   const yearFilter = selectedYear
-    ? { academicYear: { name: selectedYear.name, deletedAt: null } }
+    ? {
+        academicYearSchool: {
+          academicYear: { name: selectedYear.name, deletedAt: null },
+          deletedAt: null,
+        },
+      }
     : {};
 
   const enrollmentWhere = { ...activeEnrollmentWhere, ...yearFilter };

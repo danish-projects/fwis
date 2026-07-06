@@ -20,6 +20,7 @@ export default async function SchoolDetailPage({ params }: PageProps) {
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold md:text-3xl">{school.name}</h1>
+          <p className="font-mono text-sm text-muted-foreground">{school.code}</p>
           <p className="text-muted-foreground">
             {school.city}, {school.state}
           </p>
@@ -62,6 +63,10 @@ export default async function SchoolDetailPage({ params }: PageProps) {
           <CardTitle>School Information</CardTitle>
         </CardHeader>
         <CardContent className="grid gap-4 sm:grid-cols-2">
+          <div>
+            <p className="text-sm text-muted-foreground">School Code</p>
+            <p className="font-mono">{school.code}</p>
+          </div>
           <div>
             <p className="text-sm text-muted-foreground">Address</p>
             <p>{school.address ?? "—"}</p>

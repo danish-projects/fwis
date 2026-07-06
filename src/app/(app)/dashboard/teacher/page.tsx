@@ -52,7 +52,7 @@ export default async function TeacherDashboardPage() {
     classroomId,
     deletedAt: null,
     status: "ACTIVE" as const,
-    ...(schoolYear ? { academicYearId: schoolYear.id } : {}),
+    ...(schoolYear ? { academicYearSchoolId: schoolYear.id } : {}),
   };
 
   const enrollments = await prisma.studentEnrollment.findMany({
@@ -95,14 +95,14 @@ export default async function TeacherDashboardPage() {
         <h1 className="text-2xl font-bold md:text-3xl">My Grade Dashboard</h1>
         <p className="text-muted-foreground">
           {classroom.name} · {classroom.school.name}
-          {schoolYear ? ` · ${schoolYear.name}` : ""}
+          {schoolYear ? ` · ${schoolYear.academicYear.name}` : ""}
         </p>
       </div>
 
       {schoolYear && (
         <DashboardCalendarHighlights
           schoolId={classroom.schoolId}
-          academicYearId={schoolYear.id}
+          academicYearSchoolId={schoolYear.id}
           selectedYear={selectedYear}
         />
       )}

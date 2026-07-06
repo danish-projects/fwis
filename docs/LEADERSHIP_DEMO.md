@@ -1,6 +1,6 @@
 # FWIS Leadership Demo
 
-> **Present mode:** Open [`LEADERSHIP_DEMO.html`](./LEADERSHIP_DEMO.html) in your browser. The deck uses Mermaid for the school hierarchy diagram (requires internet on first load for the Mermaid script).
+> **Present mode:** Open [`LEADERSHIP_DEMO.html`](./LEADERSHIP_DEMO.html) in your browser. Slide 9 is a **demo coverage checklist** (checkboxes you can tick during prep). The deck uses Mermaid for diagrams (requires internet on first load).
 
 This deck explains **what FWIS does** and **how school data is organized** — from campus setup through Sunday attendance, behavior, and assessments.
 
@@ -26,6 +26,7 @@ One platform for Sunday schools: setup a campus once per year, enroll students, 
 | **Assessments** | Quiz 1–5, midterm project, final exam scores in a classroom grid |
 | **Final grades** | Weighted formula: 10% attendance + 10% behavior + 25% quizzes + 55% exams → letter grade & rank |
 | **Access control** | Super Admin, School Admin, Teacher — each role sees only what they need |
+| **Security** | HTTPS, encrypted student data, login & roles, input checks |
 
 ---
 
@@ -153,7 +154,82 @@ flowchart TB
 
 ---
 
-## Slide 8 — Live demo
+## Slide 8 — Security (plain language)
+
+**Think of student data like school records in a locked office.**
+
+| Protection | Simple explanation | What FWIS does |
+|---|---|---|
+| **HTTPS** | A sealed envelope on the road — nobody can read what you send while it travels | The site uses HTTPS so login, grades, and attendance are protected in the browser |
+| **Encryption in transit** | Data is scrambled while moving between your computer and our servers | All web traffic uses TLS (the lock icon in the browser) |
+| **Encryption at rest** | Sensitive papers stay in a locked filing cabinet, not on an open desk | Student private details (date of birth, parent phone, address) are encrypted in the database |
+| **App security** | Only staff with the right key can open the right room | Sign-in required; Super Admin / School Admin / Teacher each see only their scope; actions are logged |
+| **Input checks** | We verify forms before filing — reject bad or suspicious entries | Server-side validation on every form; limits on login attempts to block guessing |
+
+**One-line summary for leadership:** Data is protected **on the way** (HTTPS), **at rest** (encrypted student PII), and **inside the app** (roles, login, validation).
+
+---
+
+## Slide 9 — Demo coverage checklist
+
+Use this during prep or the live walkthrough. Check items off in [`LEADERSHIP_DEMO.html`](./LEADERSHIP_DEMO.html) (slide 9). Switch **School** and **Academic Year** in the app sidebar before most list pages.
+
+### Global · Dashboards
+
+| ☐ | Area | Route | What to show |
+|---|---|---|---|
+| ☐ | School switcher | sidebar | Super Admin: Houston vs Chicago; teachers, grades, enrollments filter to selected school |
+| ☐ | Academic year switcher | sidebar | Calendar, enrollments, rankings, lesson plans follow selected year |
+| ☐ | Super Admin dashboard | `/dashboard/super-admin` | Nationwide stats, top schools, Sunday attendance widget |
+| ☐ | School Admin dashboard | `/dashboard/school-admin` | Students by grade, behavior at-risk |
+| ☐ | Teacher dashboard | `/dashboard/teacher` | My grade stats and highlights |
+
+### Setup
+
+| ☐ | Area | Route | What to show |
+|---|---|---|---|
+| ☐ | Schools | `/schools` | FWIS codes (FWIS-HOU); detail & edit |
+| ☐ | Academic years | `/academic-years` | Global year; school checkboxes on edit; FWIS Docs Drive folder on year |
+| ☐ | Calendar | `/calendar` | Sundays; session types; bulk generate |
+| ☐ | Grades | `/grades` | Grade 1–6 Boys/Girls per selected school |
+| ☐ | Teachers | `/teachers` | Per-school list; assign one grade per teacher |
+| ☐ | Grading scale | `/grading-scale` | Letter-grade thresholds |
+| ☐ | Data backup | `/backup` | Export school year workbook |
+
+### Students
+
+| ☐ | Area | Route | What to show |
+|---|---|---|---|
+| ☐ | Students | `/students` | Global records; search; export |
+| ☐ | Student profile | `/students/[id]/profile` | Year-by-year history |
+| ☐ | Enrollments | `/enrollments` | Link student + year + grade; grade & status filters |
+
+### Classroom · Sunday operations
+
+| ☐ | Area | Route | What to show |
+|---|---|---|---|
+| ☐ | Attendance | `/attendance` or `/teacher/attendance` | P / A / T + behavior per Sunday |
+| ☐ | Consolidate attendance | `/attendance/consolidate` | Students × Sundays matrix |
+| ☐ | Assessments | `/assessments` or `/teacher/assessments` | Quiz 1–5, midterm, final grid |
+| ☐ | Lesson plans | `/lesson-plans` | Drive PDFs: FWIS Docs/{year}/Lesson Plans/{grade} |
+| ☐ | Transcript | `/transcript` | Printable class transcript |
+| ☐ | Rankings | `/rankings` | Class rank; Export Certificate |
+
+### Admin · Security
+
+| ☐ | Topic | What to mention |
+|---|---|---|
+| ☐ | Users | `/users` — roles and school assignment |
+| ☐ | HTTPS | Lock icon; TLS in transit |
+| ☐ | Encryption at rest | Student PII encrypted in database |
+| ☐ | Role-based access | Teachers → their grade only |
+| ☐ | Audit log | Recent activity on Super Admin dashboard |
+
+**Suggested order:** Setup (year → calendar → grades → teachers) → People (student → enrollment) → Sunday (attendance → assessments → rankings/transcript).
+
+---
+
+## Slide 10 — Live demo
 
 Run `npm run setup` once, then:
 

@@ -24,6 +24,8 @@
     "setup": "tsx scripts/setup.ts",
     "import:template": "tsx scripts/generate-import-template.ts",
     "import:school": "dotenv -e .env.local -- tsx scripts/import-school-data.ts",
+    "test:l1": "tsx scripts/run-l1-tests.ts",
+    "test:l1:vitest": "vitest run --config vitest.config.ts",
     "postinstall": "prisma generate"
   },
   "dependencies": {
@@ -70,6 +72,7 @@
     "prisma": "^7.8.0",
     "tailwindcss": "^4",
     "tsx": "^4.22.4",
-    "typescript": "^5"
+    "typescript": "^5",
+    "vitest": "^3.2.6"
   }
 }

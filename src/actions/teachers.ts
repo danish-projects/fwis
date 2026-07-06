@@ -17,6 +17,7 @@ import {
   buildTeacherScopeWhere,
   isSectionScopedAdmin,
 } from "@/lib/auth/section-scope";
+import { resolveListSchoolId } from "@/lib/school/resolve-school";
 
 function parseTeacherInput(data: TeacherInput) {
   const parsed = teacherSchema.parse(data);
@@ -237,12 +238,13 @@ export async function getTeachers(rawParams: {
   const user = await requirePermission("teachers:read");
   const params = teacherListSchema.parse(rawParams);
   const search = params.search?.trim();
+  const listSchoolId = await resolveListSchoolId(user, params.schoolId);
 
   const where: Prisma.TeacherWhereInput = {
     ...buildTeacherScopeWhere(user),
+    schoolId: listSchoolId ?? "00000000-0000-0000-0000-000000000000",
     ...(params.gender && !isSectionScopedAdmin(user) ? { gender: params.gender } : {}),
     ...(params.isActive !== undefined ? { isActive: params.isActive } : {}),
-    ...(params.schoolId ? { schoolId: params.schoolId } : {}),
     ...(search
       ? {
           OR: [
@@ -321,19 +323,23 @@ export async function getTeacherById(id: string) {
 
 export async function getTeacherFormOptions(schoolId?: string) {
   const user = await requirePermission("teachers:read");
+  const listSchoolId = await resolveListSchoolId(user, schoolId);
 
   const schools = await prisma.school.findMany({
-    where: user.roles.includes("SUPER_ADMIN")
-      ? { deletedAt: null, isActive: true }
-      : { id: { in: user.schoolIds }, deletedAt: null, isActive: true },
+    where: {
+      deletedAt: null,
+      isActive: true,
+      ...(user.roles.includes("SUPER_ADMIN")
+        ? listSchoolId
+          ? { id: listSchoolId }
+          : { id: "00000000-0000-0000-0000-000000000000" }
+        : { id: { in: user.schoolIds } }),
+    },
     orderBy: { name: "asc" },
     select: { id: true, name: true },
   });
 
-  const resolvedSchoolId =
-    schoolId && schools.some((s) => s.id === schoolId)
-      ? schoolId
-      : schools[0]?.id;
+  const resolvedSchoolId = listSchoolId ?? schools[0]?.id ?? null;
 
   const classrooms = await prisma.classroom.findMany({
     where: buildClassroomListWhere(user, {

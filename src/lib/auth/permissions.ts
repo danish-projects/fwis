@@ -36,6 +36,7 @@ export type Permission =
   | "assessments:create"
   | "assessments:update"
   | "assessments:delete"
+  | "lesson-plans:read"
   | "grading-scale:read"
   | "grading-scale:update"
   | "reports:read"
@@ -86,6 +87,7 @@ const ALL_PERMISSIONS: Permission[] = [
   "assessments:create",
   "assessments:update",
   "assessments:delete",
+  "lesson-plans:read",
   "grading-scale:read",
   "grading-scale:update",
   "reports:read",
@@ -111,6 +113,7 @@ const READ_ONLY_PERMISSIONS: Permission[] = [
   "enrollments:read",
   "attendance:read",
   "assessments:read",
+  "lesson-plans:read",
   "reports:read",
   "dashboard:read-only",
 ];
@@ -123,6 +126,7 @@ const TEACHER_PERMISSIONS: Permission[] = [
   "assessments:read",
   "assessments:create",
   "assessments:update",
+  "lesson-plans:read",
 ];
 
 const SCHOOL_ADMIN_PERMISSIONS: Permission[] = [
@@ -303,6 +307,12 @@ const CLASSROOM_NAV: NavItem[] = [
     roles: ["TEACHER"],
   },
   {
+    title: "Lesson Plans",
+    href: "/teacher/lesson-plans",
+    icon: "BookOpen",
+    roles: ["TEACHER"],
+  },
+  {
     title: "Transcript",
     href: "/teacher/transcript",
     icon: "ScrollText",
@@ -328,6 +338,13 @@ const CLASSROOM_NAV: NavItem[] = [
     icon: "FileText",
     permissions: ["assessments:read"],
     roles: ["SUPER_ADMIN", "SCHOOL_ADMIN", "READ_ONLY"],
+  },
+  {
+    title: "Lesson Plans",
+    href: "/lesson-plans",
+    icon: "BookOpen",
+    permissions: ["lesson-plans:read"],
+    roles: ["SUPER_ADMIN", "SCHOOL_ADMIN"],
   },
   {
     title: "Transcript",

@@ -3,6 +3,7 @@ export const TEACHER_ALLOWED_PATH_PREFIXES = [
   "/dashboard/teacher",
   "/teacher/attendance",
   "/teacher/assessments",
+  "/teacher/lesson-plans",
   "/unauthorized",
 ] as const;
 

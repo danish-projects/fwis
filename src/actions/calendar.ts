@@ -5,8 +5,14 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requirePermission } from "@/lib/auth/session";
 import { createAuditLog } from "@/lib/audit/create-audit-log";
-import { assertAcademicYearRecordAccess } from "@/lib/auth/academic-year-access";
-import { getSelectedAcademicYear, resolveAcademicYearForSchool } from "@/lib/academic-year/resolve-year";
+import {
+  assertAcademicYearRecordAccess,
+  assertAcademicYearSchoolAccess,
+} from "@/lib/auth/academic-year-access";
+import {
+  getSelectedAcademicYear,
+  resolveAcademicYearSchoolForSchool,
+} from "@/lib/academic-year/resolve-year";
 import { generateCalendarDaysForYear } from "@/lib/calendar/bootstrap-calendar-days";
 import { getSelectedSchool } from "@/lib/school/resolve-school";
 import {
@@ -24,28 +30,57 @@ import {
   type CalendarDayUpdateInput,
 } from "@/lib/validations/calendar";
 
-export async function getCalendarDays(academicYearId: string) {
-  const user = await requirePermission("calendar:read");
-  const { schoolId } = await assertAcademicYearRecordAccess(user, academicYearId);
-
-  const year = await prisma.academicYear.findFirst({
-    where: { id: academicYearId, deletedAt: null },
+async function resolveSchoolLinkForGlobalYear(
+  globalYearId: string,
+  schoolId: string
+) {
+  return prisma.academicYearSchool.findFirst({
+    where: {
+      academicYearId: globalYearId,
+      schoolId,
+      deletedAt: null,
+    },
     include: {
+      academicYear: true,
       school: { select: { id: true, name: true } },
-      calendarDays: {
-        where: { deletedAt: null },
-        orderBy: { date: "asc" },
-        include: {
-          _count: { select: { attendance: { where: { deletedAt: null } } } },
-        },
-      },
+    },
+  });
+}
+
+export async function getCalendarDays(globalYearId: string) {
+  const user = await requirePermission("calendar:read");
+  await assertAcademicYearRecordAccess(user, globalYearId);
+
+  const selectedSchool = await getSelectedSchool(user);
+  if (!selectedSchool) return null;
+
+  const schoolLink = await resolveSchoolLinkForGlobalYear(
+    globalYearId,
+    selectedSchool.id
+  );
+  if (!schoolLink) return null;
+
+  await requirePermission("calendar:read", { schoolId: schoolLink.schoolId });
+
+  const calendarDays = await prisma.academicCalendarDay.findMany({
+    where: { academicYearSchoolId: schoolLink.id, deletedAt: null },
+    orderBy: { date: "asc" },
+    include: {
+      _count: { select: { attendance: { where: { deletedAt: null } } } },
     },
   });
 
-  if (!year) return null;
-  await requirePermission("calendar:read", { schoolId });
-
-  return year;
+  return {
+    id: schoolLink.academicYear.id,
+    name: schoolLink.academicYear.name,
+    startDate: schoolLink.academicYear.startDate,
+    endDate: schoolLink.academicYear.endDate,
+    academicYearSchoolId: schoolLink.id,
+    schoolId: schoolLink.schoolId,
+    school: schoolLink.school,
+    isActive: schoolLink.isActive,
+    calendarDays,
+  };
 }
 
 export async function getCalendarPageContext() {
@@ -59,49 +94,53 @@ export async function getCalendarPageContext() {
     return {
       schoolId: null,
       academicYearId: null,
-      years: [] as Array<{ id: string; name: string; isActive: boolean }>,
+      academicYearSchoolId: null,
     };
   }
 
-  const schoolYear = await resolveAcademicYearForSchool(
+  const schoolYear = await resolveAcademicYearSchoolForSchool(
     selectedSchool.id,
     selectedYear
   );
 
-  const years = await prisma.academicYear.findMany({
-    where: { schoolId: selectedSchool.id, deletedAt: null },
-    orderBy: { startDate: "desc" },
-    select: { id: true, name: true, isActive: true },
-  });
-
   return {
     schoolId: selectedSchool.id,
-    academicYearId: schoolYear?.id ?? null,
-    years,
+    academicYearId: schoolYear?.academicYearId ?? null,
+    academicYearSchoolId: schoolYear?.id ?? null,
   };
 }
 
-export async function bulkGenerateCalendarDays(academicYearId: string) {
+export async function bulkGenerateCalendarDays(globalYearId: string) {
   const user = await requirePermission("calendar:create");
-  const { schoolId } = await assertAcademicYearRecordAccess(user, academicYearId);
+  await assertAcademicYearRecordAccess(user, globalYearId);
 
-  const year = await prisma.academicYear.findFirst({
-    where: { id: academicYearId, deletedAt: null },
-  });
-  if (!year) throw new Error("Academic year not found");
+  const selectedSchool = await getSelectedSchool(user);
+  if (!selectedSchool) throw new Error("No school selected");
+
+  const schoolLink = await resolveSchoolLinkForGlobalYear(
+    globalYearId,
+    selectedSchool.id
+  );
+  if (!schoolLink) {
+    throw new Error("Academic year is not linked to the selected school");
+  }
 
   const result = await generateCalendarDaysForYear(
-    academicYearId,
-    year.startDate,
-    year.endDate
+    schoolLink.id,
+    schoolLink.academicYear.startDate,
+    schoolLink.academicYear.endDate
   );
 
   await createAuditLog({
     userId: user.id,
-    schoolId,
+    schoolId: schoolLink.schoolId,
     entity: "AcademicCalendarDay",
     action: "CREATE",
-    newValues: { academicYearId, ...result },
+    newValues: {
+      academicYearSchoolId: schoolLink.id,
+      academicYearId: globalYearId,
+      ...result,
+    },
   });
 
   revalidatePath("/calendar");
@@ -112,17 +151,16 @@ export async function bulkGenerateCalendarDays(academicYearId: string) {
 export async function createCalendarDay(data: CalendarDayInput) {
   const user = await requirePermission("calendar:create");
   const parsed = calendarDaySchema.parse(data);
-  const { schoolId } = await assertAcademicYearRecordAccess(
-    user,
-    parsed.academicYearId
-  );
 
-  const year = await prisma.academicYear.findFirst({
-    where: { id: parsed.academicYearId, deletedAt: null },
-    select: { startDate: true, endDate: true },
+  const schoolLink = await prisma.academicYearSchool.findFirst({
+    where: { id: parsed.academicYearSchoolId, deletedAt: null },
+    include: { academicYear: true },
   });
-  if (!year) throw new Error("Academic year not found");
+  if (!schoolLink) throw new Error("Academic year school link not found");
 
+  await assertAcademicYearSchoolAccess(user, schoolLink.schoolId);
+
+  const year = schoolLink.academicYear;
   const date = parseCalendarDateInput(parsed.date);
   const dateKey = calendarDateKey(date);
   const startKey = calendarDateKey(year.startDate);
@@ -135,7 +173,7 @@ export async function createCalendarDay(data: CalendarDayInput) {
 
   const existing = await prisma.academicCalendarDay.findFirst({
     where: {
-      academicYearId: parsed.academicYearId,
+      academicYearSchoolId: parsed.academicYearSchoolId,
       date,
       deletedAt: null,
     },
@@ -152,7 +190,7 @@ export async function createCalendarDay(data: CalendarDayInput) {
 
   const day = await prisma.academicCalendarDay.create({
     data: {
-      academicYearId: parsed.academicYearId,
+      academicYearSchoolId: parsed.academicYearSchoolId,
       date,
       lessonPlanNumber: isAttendanceNeeded(parsed.sessionType)
         ? parsed.lessonPlanNumber ?? null
@@ -163,7 +201,7 @@ export async function createCalendarDay(data: CalendarDayInput) {
 
   await createAuditLog({
     userId: user.id,
-    schoolId,
+    schoolId: schoolLink.schoolId,
     entity: "AcademicCalendarDay",
     entityId: day.id,
     action: "CREATE",
@@ -180,11 +218,16 @@ export async function updateCalendarDay(id: string, data: CalendarDayUpdateInput
 
   const before = await prisma.academicCalendarDay.findFirst({
     where: { id, deletedAt: null },
-    include: { academicYear: { select: { schoolId: true } } },
+    include: {
+      academicYearSchool: { select: { schoolId: true, academicYearId: true } },
+    },
   });
   if (!before) throw new Error("Calendar day not found");
 
-  await assertAcademicYearRecordAccess(user, before.academicYearId);
+  await assertAcademicYearRecordAccess(
+    user,
+    before.academicYearSchool.academicYearId
+  );
 
   const day = await prisma.academicCalendarDay.update({
     where: { id },
@@ -198,7 +241,7 @@ export async function updateCalendarDay(id: string, data: CalendarDayUpdateInput
 
   await createAuditLog({
     userId: user.id,
-    schoolId: before.academicYear.schoolId,
+    schoolId: before.academicYearSchool.schoolId,
     entity: "AcademicCalendarDay",
     entityId: day.id,
     action: "UPDATE",
@@ -217,13 +260,16 @@ export async function deleteCalendarDay(id: string) {
   const before = await prisma.academicCalendarDay.findFirst({
     where: { id, deletedAt: null },
     include: {
-      academicYear: { select: { schoolId: true } },
+      academicYearSchool: { select: { schoolId: true, academicYearId: true } },
       _count: { select: { attendance: { where: { deletedAt: null } } } },
     },
   });
   if (!before) throw new Error("Calendar day not found");
 
-  await assertAcademicYearRecordAccess(user, before.academicYearId);
+  await assertAcademicYearRecordAccess(
+    user,
+    before.academicYearSchool.academicYearId
+  );
 
   if (before._count.attendance > 0) {
     throw new Error("Cannot delete a calendar day that has attendance records");
@@ -236,7 +282,7 @@ export async function deleteCalendarDay(id: string) {
 
   await createAuditLog({
     userId: user.id,
-    schoolId: before.academicYear.schoolId,
+    schoolId: before.academicYearSchool.schoolId,
     entity: "AcademicCalendarDay",
     entityId: day.id,
     action: "DELETE",
@@ -253,12 +299,20 @@ export async function getCalendarDayById(id: string) {
   const day = await prisma.academicCalendarDay.findFirst({
     where: { id, deletedAt: null },
     include: {
-      academicYear: { include: { school: true } },
+      academicYearSchool: {
+        include: {
+          academicYear: true,
+          school: true,
+        },
+      },
       _count: { select: { attendance: { where: { deletedAt: null } } } },
     },
   });
   if (!day) return null;
 
-  await assertAcademicYearRecordAccess(user, day.academicYearId);
+  await assertAcademicYearRecordAccess(
+    user,
+    day.academicYearSchool.academicYearId
+  );
   return day;
 }

@@ -13,13 +13,33 @@ export async function assertAcademicYearSchoolAccess(
 export async function assertAcademicYearRecordAccess(
   user: AuthUser,
   academicYearId: string
-): Promise<{ schoolId: string }> {
+): Promise<{ schoolIds: string[] }> {
   const { prisma } = await import("@/lib/prisma");
-  const year = await prisma.academicYear.findFirst({
-    where: { id: academicYearId, deletedAt: null },
+  const links = await prisma.academicYearSchool.findMany({
+    where: { academicYearId, deletedAt: null },
     select: { schoolId: true },
   });
-  if (!year) throw new Error("Academic year not found");
-  await assertAcademicYearSchoolAccess(user, year.schoolId);
-  return year;
+  if (links.length === 0) throw new Error("Academic year not found");
+
+  const schoolIds = links.map((link) => link.schoolId);
+  if (!user.roles.includes("SUPER_ADMIN")) {
+    const allowed = schoolIds.some((id) => user.schoolIds.includes(id));
+    if (!allowed) throw new Error("Unauthorized school access");
+  }
+
+  return { schoolIds };
+}
+
+export async function assertAcademicYearSchoolRecordAccess(
+  user: AuthUser,
+  academicYearSchoolId: string
+): Promise<{ schoolId: string; academicYearId: string }> {
+  const { prisma } = await import("@/lib/prisma");
+  const link = await prisma.academicYearSchool.findFirst({
+    where: { id: academicYearSchoolId, deletedAt: null },
+    select: { schoolId: true, academicYearId: true },
+  });
+  if (!link) throw new Error("Academic year school link not found");
+  await assertAcademicYearSchoolAccess(user, link.schoolId);
+  return link;
 }

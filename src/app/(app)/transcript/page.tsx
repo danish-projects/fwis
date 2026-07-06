@@ -37,7 +37,6 @@ export default async function TranscriptPage() {
         }))}
         hrefPrefix="/transcript"
         actionLabel="View Transcript"
-        actionVariant="outline"
       />
     </div>
   );

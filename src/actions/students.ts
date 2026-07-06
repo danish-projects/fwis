@@ -35,7 +35,10 @@ async function buildEnrollmentYearFilter(user: AuthUser) {
     return {
       deletedAt: null,
       status: "ACTIVE" as const,
-      academicYear: { name: selectedYear.name, deletedAt: null },
+      academicYearSchool: {
+        academicYear: { name: selectedYear.name, deletedAt: null },
+        deletedAt: null,
+      },
     };
   }
 
@@ -53,7 +56,7 @@ async function buildEnrollmentYearFilter(user: AuthUser) {
   return {
     deletedAt: null,
     status: "ACTIVE" as const,
-    ...(schoolYear ? { academicYearId: schoolYear.id } : {}),
+    ...(schoolYear ? { academicYearSchoolId: schoolYear.id } : {}),
     ...classroomScope,
   };
 }
@@ -280,7 +283,9 @@ export async function getStudents(rawParams: {
           include: {
             school: { select: { name: true } },
             classroom: { select: { name: true } },
-            academicYear: { select: { name: true } },
+            academicYearSchool: {
+              select: { academicYear: { select: { name: true } } },
+            },
           },
         },
       },
@@ -317,7 +322,7 @@ export async function getStudentById(id: string) {
         include: {
           school: true,
           classroom: { include: { grade: true, section: true } },
-          academicYear: true,
+          academicYearSchool: { include: { academicYear: true } },
           teacher: { select: { firstName: true, lastName: true } },
         },
       },

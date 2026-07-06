@@ -116,7 +116,7 @@ export async function getSchoolRankings(): Promise<SchoolRankingsData | null> {
     prisma.studentEnrollment.findMany({
       where: mergeEnrollmentScope(user, {
         schoolId: selectedSchool.id,
-        academicYearId: schoolYear.id,
+        academicYearSchoolId: schoolYear.id,
         status: "ACTIVE",
         deletedAt: null,
       }),
@@ -158,7 +158,7 @@ export async function getSchoolRankings(): Promise<SchoolRankingsData | null> {
   if (needsCompute.length > 0) {
     const [days, attendanceRows] = await Promise.all([
       prisma.academicCalendarDay.findMany({
-        where: { academicYearId: schoolYear.id, deletedAt: null },
+        where: { academicYearSchoolId: schoolYear.id, deletedAt: null },
         select: { id: true, sessionType: true },
       }),
       prisma.attendance.findMany({
@@ -297,7 +297,7 @@ export async function getSchoolRankings(): Promise<SchoolRankingsData | null> {
   return {
     schoolId: selectedSchool.id,
     schoolName: selectedSchool.name,
-    academicYearName: schoolYear.name,
+    academicYearName: schoolYear.academicYear.name,
     achievement,
     attendance,
     completion,
@@ -393,7 +393,7 @@ async function loadRankCertificateContext() {
     }),
     prisma.academicCalendarDay.findFirst({
       where: {
-        academicYearId: schoolYear.id,
+        academicYearSchoolId: schoolYear.id,
         sessionType: "GRADUATION",
         deletedAt: null,
       },
@@ -405,8 +405,8 @@ async function loadRankCertificateContext() {
   if (!school) return null;
 
   const academicTerm = formatAcademicTerm(
-    schoolYear.startDate,
-    schoolYear.endDate
+    schoolYear.academicYear.startDate,
+    schoolYear.academicYear.endDate
   );
   const graduationDate = graduationDay
     ? formatGraduationDate(graduationDay.date)

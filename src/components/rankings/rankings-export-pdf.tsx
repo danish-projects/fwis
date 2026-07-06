@@ -146,7 +146,7 @@ export function RankingsExportPdf({
         disabled={open || requests.length === 0}
         onClick={handleExport}
       >
-        Export PDF
+        Export Certificate
       </Button>
 
       {open &&

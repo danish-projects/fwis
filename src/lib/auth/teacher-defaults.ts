@@ -58,7 +58,7 @@ export async function getDefaultAttendanceDayId(
 
   const calendarDays = await prisma.academicCalendarDay.findMany({
     where: {
-      academicYearId: activeYear.id,
+      academicYearSchoolId: activeYear.id,
       deletedAt: null,
       sessionType: { in: ATTENDANCE_MARKABLE_SESSION_TYPES },
     },

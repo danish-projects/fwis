@@ -138,7 +138,7 @@ export default async function StudentDetailPage({ params }: PageProps) {
               <tbody>
                 {student.enrollments.map((e) => (
                   <tr key={e.id} className="border-b last:border-0">
-                    <td className="py-3 pr-4">{e.academicYear.name}</td>
+                    <td className="py-3 pr-4">{e.academicYearSchool.academicYear.name}</td>
                     <td className="py-3 pr-4">{e.school.name}</td>
                     <td className="py-3 pr-4">{e.classroom.name}</td>
                     <td className="py-3 pr-4">
@@ -151,7 +151,7 @@ export default async function StudentDetailPage({ params }: PageProps) {
                     </td>
                     <td className="py-3">
                       <Button asChild variant="ghost" size="sm">
-                        <Link href={`/students/${student.id}/profile?year=${e.academicYearId}`}>
+                        <Link href={`/students/${student.id}/profile?year=${e.academicYearSchool.academicYear.id}`}>
                           Profile
                         </Link>
                       </Button>

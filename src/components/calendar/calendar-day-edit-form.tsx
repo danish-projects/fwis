@@ -71,7 +71,7 @@ export function CalendarDayEditForm({ day }: CalendarDayEditFormProps) {
           </Button>
           <h1 className="text-2xl font-bold">Edit Calendar Day</h1>
           <p className="text-muted-foreground">
-            {day.academicYear.name} · {formatSundayDate(day.date)}
+            {day.academicYearSchool.academicYear.name} · {formatSundayDate(day.date)}
           </p>
         </div>
         <Button

@@ -18,14 +18,17 @@ export default async function AcademicYearDetailPage({ params }: PageProps) {
   if (!year) notFound();
 
   return (
-    <div className="mx-auto max-w-3xl space-y-6">
+    <div className="mx-auto max-w-4xl space-y-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <Button asChild variant="ghost" size="sm" className="mb-2 -ml-2">
             <Link href="/academic-years">← Back to academic years</Link>
           </Button>
           <h1 className="text-2xl font-bold md:text-3xl">{year.name}</h1>
-          <p className="text-muted-foreground">{year.school.name}</p>
+          <p className="text-muted-foreground">
+            Global academic year · {year.schoolLinks.length} school
+            {year.schoolLinks.length === 1 ? "" : "s"} linked
+          </p>
         </div>
         <Button asChild>
           <Link href={`/academic-years/${year.id}/edit`}>Edit</Link>
@@ -45,28 +48,66 @@ export default async function AcademicYearDetailPage({ params }: PageProps) {
             <p className="text-sm text-muted-foreground">End Date</p>
             <p className="font-medium">{formatDate(year.endDate)}</p>
           </div>
-          <div>
-            <p className="text-sm text-muted-foreground">Status</p>
-            <Badge variant={year.isActive ? "success" : "secondary"} className="mt-1">
-              {year.isActive ? "Active" : "Inactive"}
-            </Badge>
-          </div>
-          <div>
-            <p className="text-sm text-muted-foreground">Calendar Days</p>
-            <p className="font-medium">{year._count.calendarDays}</p>
-          </div>
-          <div>
-            <p className="text-sm text-muted-foreground">Enrollments</p>
-            <p className="font-medium">{year._count.enrollments}</p>
+          <div className="sm:col-span-2">
+            <p className="text-sm text-muted-foreground">FWIS Docs folder ID</p>
+            <p className="font-mono text-sm break-all">
+              {year.docsDriveFolderId ?? "—"}
+            </p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Lesson plans: FWIS Docs/{year.name}/Lesson Plans/&lt;grade&gt;
+            </p>
           </div>
         </CardContent>
       </Card>
 
-      <Button asChild variant="outline">
-        <Link href={`/calendar?school=${year.schoolId}&year=${year.id}`}>
-          View Calendar
-        </Link>
-      </Button>
+      <Card>
+        <CardHeader>
+          <CardTitle>Linked Schools</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[560px] text-sm">
+              <thead>
+                <tr className="border-b text-left text-muted-foreground">
+                  <th className="pb-3 pr-4 font-medium">Code</th>
+                  <th className="pb-3 pr-4 font-medium">School</th>
+                  <th className="pb-3 pr-4 font-medium">Status</th>
+                  <th className="pb-3 pr-4 font-medium">Calendar</th>
+                  <th className="pb-3 font-medium">Enrollments</th>
+                </tr>
+              </thead>
+              <tbody>
+                {year.schoolLinks.map((link) => (
+                  <tr key={link.id} className="border-b last:border-0">
+                    <td className="py-3 pr-4 font-mono text-xs">{link.school.code}</td>
+                    <td className="py-3 pr-4">{link.school.name}</td>
+                    <td className="py-3 pr-4">
+                      <Badge variant={link.isActive ? "success" : "secondary"}>
+                        {link.isActive ? "Active" : "Inactive"}
+                      </Badge>
+                    </td>
+                    <td className="py-3 pr-4">{link._count.calendarDays}</td>
+                    <td className="py-3">{link._count.enrollments}</td>
+                  </tr>
+                ))}
+                {year.schoolLinks.length === 0 && (
+                  <tr>
+                    <td colSpan={5} className="py-6 text-center text-muted-foreground">
+                      No schools linked to this year yet.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </CardContent>
+      </Card>
+
+      {year.schoolLinks.length > 0 && (
+        <Button asChild variant="outline">
+          <Link href="/calendar">View Calendar</Link>
+        </Button>
+      )}
     </div>
   );
 }

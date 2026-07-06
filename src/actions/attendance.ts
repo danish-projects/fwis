@@ -43,12 +43,12 @@ export async function bulkUpsertAttendance(
   const calendarDay = await prisma.academicCalendarDay.findUnique({
     where: { id: validatedDayId },
     include: {
-      academicYear: { include: { school: true } },
+      academicYearSchool: { include: { school: true } },
     },
   });
   if (!calendarDay) throw new Error("Calendar day not found");
 
-  const schoolId = calendarDay.academicYear.schoolId;
+  const schoolId = calendarDay.academicYearSchool.schoolId;
   await assertUserSchoolAccess(user, schoolId);
   assertCanPerformScopedWrite(user);
 
@@ -219,7 +219,7 @@ export async function getAttendanceSession(
 
   const calendarDays = await prisma.academicCalendarDay.findMany({
     where: {
-      academicYearId: activeYear.id,
+      academicYearSchoolId: activeYear.id,
       deletedAt: null,
       sessionType: { in: ATTENDANCE_MARKABLE_SESSION_TYPES },
     },
@@ -238,7 +238,7 @@ export async function getAttendanceSession(
   const enrollments = await prisma.studentEnrollment.findMany({
     where: {
       classroomId,
-      academicYearId: activeYear.id,
+      academicYearSchoolId: activeYear.id,
       deletedAt: null,
       status: "ACTIVE",
     },
@@ -362,7 +362,7 @@ async function attachEnrollmentCounts<
     by: ["classroomId"],
     where: {
       classroomId: { in: classrooms.map((c) => c.id) },
-      academicYearId: { in: yearIds },
+      academicYearSchoolId: { in: yearIds },
       deletedAt: null,
       status: "ACTIVE",
     },
@@ -434,7 +434,7 @@ export async function getClassroomsForConsolidateAttendance(schoolId: string) {
         some: {
           status: "ACTIVE",
           deletedAt: null,
-          ...(schoolYear ? { academicYearId: schoolYear.id } : {}),
+          ...(schoolYear ? { academicYearSchoolId: schoolYear.id } : {}),
         },
       },
     },
@@ -474,7 +474,7 @@ export async function getGradesForAttendanceSummary(schoolId: string) {
             some: {
               status: "ACTIVE",
               deletedAt: null,
-              ...(schoolYear ? { academicYearId: schoolYear.id } : {}),
+              ...(schoolYear ? { academicYearSchoolId: schoolYear.id } : {}),
             },
           },
         },
@@ -554,7 +554,7 @@ export async function getGradeAttendanceMatrix(
 
   const enrollmentWhere: {
     schoolId: string;
-    academicYearId: string;
+    academicYearSchoolId: string;
     status: "ACTIVE";
     deletedAt: null;
     classroomId?: string | { in: string[] };
@@ -567,7 +567,7 @@ export async function getGradeAttendanceMatrix(
     };
   } = {
     schoolId,
-    academicYearId: activeYear.id,
+    academicYearSchoolId: activeYear.id,
     status: "ACTIVE",
     deletedAt: null,
   };
@@ -607,7 +607,7 @@ export async function getGradeAttendanceMatrix(
 
   const [calendarDays, enrollments] = await Promise.all([
     prisma.academicCalendarDay.findMany({
-      where: { academicYearId: activeYear.id, deletedAt: null },
+      where: { academicYearSchoolId: activeYear.id, deletedAt: null },
       orderBy: { date: "asc" },
       select: {
         id: true,
@@ -688,7 +688,10 @@ export async function getGradeAttendanceMatrix(
     school,
     grade: grade ?? classroomRecord?.grade ?? null,
     classroom: classroomRecord,
-    academicYear: { id: activeYear.id, name: activeYear.name },
+    academicYear: {
+      id: activeYear.academicYearId,
+      name: activeYear.academicYear.name,
+    },
     calendarDays: calendarDayRows,
     students,
   };

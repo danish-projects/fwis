@@ -15,6 +15,7 @@ import {
 } from "@/lib/auth/section-scope";
 import { sectionNameForGender } from "@/lib/teachers/gender-section";
 import { getSelectedAcademicYear, resolveAcademicYearForSchool } from "@/lib/academic-year/resolve-year";
+import { resolveListSchoolId } from "@/lib/school/resolve-school";
 import {
   gradeRecordSchema,
   gradeRecordListSchema,
@@ -211,9 +212,13 @@ export async function getGradeRecords(rawParams: {
   const params = gradeRecordListSchema.parse(rawParams);
   const search = params.search?.trim();
   const selectedYear = await getSelectedAcademicYear(user);
+  const listSchoolId = await resolveListSchoolId(user, params.schoolId);
 
   const where: Prisma.ClassroomWhereInput = {
-    ...buildClassroomListWhere(user, params.schoolId ? { schoolId: params.schoolId } : {}),
+    ...buildClassroomListWhere(
+      user,
+      listSchoolId ? { schoolId: listSchoolId } : { schoolId: "00000000-0000-0000-0000-000000000000" }
+    ),
     ...(search
       ? {
           OR: [
@@ -252,7 +257,7 @@ export async function getGradeRecords(rawParams: {
           by: ["classroomId"],
           where: {
             classroomId: { in: records.map((r) => r.id) },
-            academicYearId: { in: yearIds },
+            academicYearSchoolId: { in: yearIds },
             deletedAt: null,
             status: "ACTIVE",
           },
@@ -306,7 +311,7 @@ export async function getGradeRecordById(id: string) {
     ? await prisma.studentEnrollment.count({
         where: {
           classroomId: id,
-          academicYearId: schoolYear.id,
+          academicYearSchoolId: schoolYear.id,
           deletedAt: null,
           status: "ACTIVE",
         },
@@ -318,12 +323,19 @@ export async function getGradeRecordById(id: string) {
 
 export async function getGradeRecordFormOptions(schoolId?: string) {
   const user = await requirePermission("classrooms:read");
+  const listSchoolId = await resolveListSchoolId(user, schoolId);
 
   const [schools, grades, sections] = await Promise.all([
     prisma.school.findMany({
-      where: user.roles.includes("SUPER_ADMIN")
-        ? { deletedAt: null, isActive: true }
-        : { id: { in: user.schoolIds }, deletedAt: null, isActive: true },
+      where: {
+        deletedAt: null,
+        isActive: true,
+        ...(user.roles.includes("SUPER_ADMIN")
+          ? listSchoolId
+            ? { id: listSchoolId }
+            : { id: "00000000-0000-0000-0000-000000000000" }
+          : { id: { in: user.schoolIds } }),
+      },
       orderBy: { name: "asc" },
       select: { id: true, name: true },
     }),
@@ -331,10 +343,7 @@ export async function getGradeRecordFormOptions(schoolId?: string) {
     prisma.section.findMany({ orderBy: { name: "asc" } }),
   ]);
 
-  const defaultSchoolId =
-    schoolId && schools.some((s) => s.id === schoolId)
-      ? schoolId
-      : schools[0]?.id ?? null;
+  const defaultSchoolId = listSchoolId ?? schools[0]?.id ?? null;
 
   return { schools, grades, sections, defaultSchoolId };
 }

@@ -17,7 +17,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
 type CalendarDayCreateFormProps = {
-  academicYearId: string;
+  academicYearSchoolId: string;
   academicYearName: string;
   schoolName: string;
   startDate: string;
@@ -26,7 +26,7 @@ type CalendarDayCreateFormProps = {
 };
 
 export function CalendarDayCreateForm({
-  academicYearId,
+  academicYearSchoolId,
   academicYearName,
   schoolName,
   startDate,
@@ -48,7 +48,7 @@ export function CalendarDayCreateForm({
 
     try {
       await createCalendarDay({
-        academicYearId,
+        academicYearSchoolId,
         date: String(form.get("date")),
         sessionType,
         lessonPlanNumber,

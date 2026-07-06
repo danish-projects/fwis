@@ -53,7 +53,7 @@ export default async function EnrollmentDetailPage({ params }: PageProps) {
             {enrollment.student.firstName} {enrollment.student.lastName}
           </h1>
           <p className="text-muted-foreground">
-            {enrollment.academicYear.name} · {enrollment.classroom.name}
+            {enrollment.academicYearSchool.academicYear.name} · {enrollment.classroom.name}
           </p>
         </div>
         <div className="flex gap-2">

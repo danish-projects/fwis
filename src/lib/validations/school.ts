@@ -14,7 +14,7 @@ export const schoolSchema = z.object({
   phone: z.string().optional(),
   email: z.string().email("Invalid email").optional().or(z.literal("")),
   principalName: z.string().optional(),
-  isActive: z.boolean().default(true),
+    isActive: z.boolean().default(true),
 });
 
 export type SchoolInput = z.infer<typeof schoolSchema>;

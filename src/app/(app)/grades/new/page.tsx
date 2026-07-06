@@ -55,6 +55,7 @@ export default function NewGradePage() {
         <CardContent>
           <GradeForm
             options={options}
+            defaultValues={{ schoolId: options.defaultSchoolId ?? undefined }}
             onSubmit={handleSubmit}
             submitLabel="Create Grade"
             cancelHref="/grades"

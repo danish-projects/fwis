@@ -4,7 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { defaultSessionTypeForSunday, generateSundays } from "@/lib/calendar/generate-sundays";
 
 export async function generateCalendarDaysForYear(
-  academicYearId: string,
+  academicYearSchoolId: string,
   startDate: Date,
   endDate: Date
 ) {
@@ -12,7 +12,7 @@ export async function generateCalendarDaysForYear(
   if (sundays.length === 0) return { created: 0, skipped: 0 };
 
   const existing = await prisma.academicCalendarDay.findMany({
-    where: { academicYearId, deletedAt: null },
+    where: { academicYearSchoolId, deletedAt: null },
     select: { date: true, lessonPlanNumber: true },
   });
   const existingDates = new Set(
@@ -24,7 +24,7 @@ export async function generateCalendarDaysForYear(
   );
 
   const toCreate: Array<{
-    academicYearId: string;
+    academicYearSchoolId: string;
     date: Date;
     lessonPlanNumber: number | null;
     sessionType: SessionType;
@@ -38,7 +38,7 @@ export async function generateCalendarDaysForYear(
       ? ++weekCounter
       : null;
     toCreate.push({
-      academicYearId,
+      academicYearSchoolId,
       date,
       lessonPlanNumber,
       sessionType,

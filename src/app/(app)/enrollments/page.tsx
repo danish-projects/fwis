@@ -1,8 +1,9 @@
 import Link from "next/link";
 import { Plus, Search } from "lucide-react";
-import { getEnrollments } from "@/actions/enrollments";
+import { getEnrollments, getEnrollmentFormOptions } from "@/actions/enrollments";
 import { getSessionUser, requirePermission } from "@/lib/auth/session";
 import { hasPermission } from "@/lib/auth/permissions";
+import { getSelectedSchool } from "@/lib/school/resolve-school";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
@@ -15,25 +16,48 @@ type PageProps = {
   searchParams: Promise<{
     page?: string;
     search?: string;
-    schoolId?: string;
     status?: string;
+    classroomId?: string;
   }>;
 };
+
+function buildQuery(
+  params: Record<string, string | undefined>,
+  overrides: Record<string, string | undefined> = {}
+) {
+  const merged = { ...params, ...overrides };
+  const qs = new URLSearchParams();
+  Object.entries(merged).forEach(([k, v]) => {
+    if (v) qs.set(k, v);
+  });
+  const str = qs.toString();
+  return str ? `?${str}` : "";
+}
 
 export default async function EnrollmentsPage({ searchParams }: PageProps) {
   await requirePermission("enrollments:read");
   const user = await getSessionUser();
   const canCreate = user && hasPermission(user.roles, "enrollments:create");
+  const selectedSchool = user ? await getSelectedSchool(user) : null;
 
   const params = await searchParams;
   const page = Number(params.page) || 1;
 
-  const { data: enrollments, meta } = await getEnrollments({
-    page,
+  const [{ data: enrollments, meta }, { classrooms }] = await Promise.all([
+    getEnrollments({
+      page,
+      search: params.search,
+      status: params.status,
+      classroomId: params.classroomId,
+    }),
+    getEnrollmentFormOptions(),
+  ]);
+
+  const queryBase = {
     search: params.search,
-    schoolId: params.schoolId,
     status: params.status,
-  });
+    classroomId: params.classroomId,
+  };
 
   return (
     <div className="space-y-6">
@@ -42,6 +66,7 @@ export default async function EnrollmentsPage({ searchParams }: PageProps) {
           <h1 className="text-2xl font-bold md:text-3xl">Enrollments</h1>
           <p className="text-muted-foreground">
             Link students to schools, years, and grades
+            {selectedSchool ? ` · ${selectedSchool.name}` : ""}
           </p>
         </div>
         {canCreate && (
@@ -67,6 +92,18 @@ export default async function EnrollmentsPage({ searchParams }: PageProps) {
               />
             </div>
             <select
+              name="classroomId"
+              defaultValue={params.classroomId ?? ""}
+              className="h-10 rounded-md border border-input bg-background px-3 text-sm"
+            >
+              <option value="">All grades</option>
+              {classrooms.map((classroom) => (
+                <option key={classroom.id} value={classroom.id}>
+                  {classroom.name}
+                </option>
+              ))}
+            </select>
+            <select
               name="status"
               defaultValue={params.status ?? ""}
               className="h-10 rounded-md border border-input bg-background px-3 text-sm"
@@ -89,9 +126,9 @@ export default async function EnrollmentsPage({ searchParams }: PageProps) {
                 <tr className="border-b text-left text-muted-foreground">
                   <th className="pb-3 pr-4 font-medium">Student</th>
                   <th className="pb-3 pr-4 font-medium">School / Year</th>
-                  <th className="pb-3 pr-4 font-medium">Grade</th>
+                  <th className="pb-3 pr-4 font-medium">Classroom</th>
                   <th className="pb-3 pr-4 font-medium">Teacher</th>
-                  <th className="pb-3 pr-4 font-medium">Grade</th>
+                  <th className="pb-3 pr-4 font-medium">Final Grade</th>
                   <th className="pb-3 pr-4 font-medium">Status</th>
                   <th className="pb-3 font-medium">Actions</th>
                 </tr>
@@ -109,7 +146,7 @@ export default async function EnrollmentsPage({ searchParams }: PageProps) {
                     </td>
                     <td className="py-3 pr-4 text-muted-foreground">
                       <p>{e.school.name}</p>
-                      <p className="text-xs">{e.academicYear.name}</p>
+                      <p className="text-xs">{e.academicYearSchool.academicYear.name}</p>
                     </td>
                     <td className="py-3 pr-4">{e.classroom.name}</td>
                     <td className="py-3 pr-4">
@@ -138,7 +175,7 @@ export default async function EnrollmentsPage({ searchParams }: PageProps) {
                           <Link href={`/enrollments/${e.id}`}>View</Link>
                         </Button>
                         <Button asChild variant="ghost" size="sm">
-                          <Link href={`/students/${e.studentId}/profile?year=${e.academicYearId}`}>
+                          <Link href={`/students/${e.studentId}/profile?year=${e.academicYearSchool.academicYear.id}`}>
                             Profile
                           </Link>
                         </Button>
@@ -149,7 +186,9 @@ export default async function EnrollmentsPage({ searchParams }: PageProps) {
                 {enrollments.length === 0 && (
                   <tr>
                     <td colSpan={7} className="py-8 text-center text-muted-foreground">
-                      No enrollments found.
+                      {selectedSchool
+                        ? "No enrollments found for this school."
+                        : "Select a school to view enrollments."}
                     </td>
                   </tr>
                 )}
@@ -164,12 +203,20 @@ export default async function EnrollmentsPage({ searchParams }: PageProps) {
               <div className="flex gap-2">
                 {meta.page > 1 && (
                   <Button asChild variant="outline" size="sm">
-                    <Link href={`/enrollments?page=${meta.page - 1}`}>Previous</Link>
+                    <Link
+                      href={`/enrollments${buildQuery(queryBase, { page: String(meta.page - 1) })}`}
+                    >
+                      Previous
+                    </Link>
                   </Button>
                 )}
                 {meta.page < meta.totalPages && (
                   <Button asChild variant="outline" size="sm">
-                    <Link href={`/enrollments?page=${meta.page + 1}`}>Next</Link>
+                    <Link
+                      href={`/enrollments${buildQuery(queryBase, { page: String(meta.page + 1) })}`}
+                    >
+                      Next
+                    </Link>
                   </Button>
                 )}
               </div>

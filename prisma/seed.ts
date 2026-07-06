@@ -12,6 +12,7 @@ import {
   deriveCityCode,
 } from "../src/lib/students/student-number";
 import { encryptStudentPiiForDb } from "../src/lib/students/student-pii";
+import { formatSchoolCode } from "../src/lib/school/format-school-code";
 import { assertDevOnlyScript } from "../scripts/lib/assert-dev-only";
 
 const rootDir = process.cwd();
@@ -221,22 +222,26 @@ async function upsertSchoolByLocation(location: (typeof SCHOOL_LOCATIONS)[number
   });
 
   if (existing) {
+    const cityCode = existing.cityCode || deriveCityCode(location.city);
     return prisma.school.update({
       where: { id: existing.id },
       data: {
         name: location.name,
         principalName: location.principalName,
         isActive: true,
-        ...(existing.cityCode ? {} : { cityCode: deriveCityCode(location.city) }),
+        code: existing.code || formatSchoolCode(cityCode),
+        ...(existing.cityCode ? {} : { cityCode }),
       },
     });
   }
 
+  const cityCode = deriveCityCode(location.city);
   return prisma.school.create({
     data: {
       name: location.name,
+      code: formatSchoolCode(cityCode),
       city: location.city,
-      cityCode: deriveCityCode(location.city),
+      cityCode,
       state: location.state,
       principalName: location.principalName,
       email: `admin@${location.city.toLowerCase().replace(/\s/g, "")}.fwis.org`,
@@ -279,18 +284,34 @@ async function main() {
 
   const schools = await Promise.all(SCHOOL_LOCATIONS.map((location) => upsertSchoolByLocation(location)));
 
+  let globalYear = await prisma.academicYear.findFirst({
+    where: { name: "2025-2026", deletedAt: null },
+  });
+
+  if (!globalYear) {
+    globalYear = await prisma.academicYear.create({
+      data: {
+        name: "2025-2026",
+        startDate: new Date("2025-09-07"),
+        endDate: new Date("2026-05-31"),
+      },
+    });
+  }
+
   for (const school of schools) {
-    let year = await prisma.academicYear.findFirst({
-      where: { schoolId: school.id, name: "2025-2026", deletedAt: null },
+    let schoolLink = await prisma.academicYearSchool.findFirst({
+      where: {
+        schoolId: school.id,
+        academicYearId: globalYear.id,
+        deletedAt: null,
+      },
     });
 
-    if (!year) {
-      year = await prisma.academicYear.create({
+    if (!schoolLink) {
+      schoolLink = await prisma.academicYearSchool.create({
         data: {
           schoolId: school.id,
-          name: "2025-2026",
-          startDate: new Date("2025-09-07"),
-          endDate: new Date("2026-05-31"),
+          academicYearId: globalYear.id,
           isActive: true,
         },
       });
@@ -304,7 +325,7 @@ async function main() {
             ? ++weekCounter
             : null;
           return {
-            academicYearId: year!.id,
+            academicYearSchoolId: schoolLink!.id,
             date,
             lessonPlanNumber,
             sessionType,
@@ -375,10 +396,11 @@ async function main() {
   let studentCounter = 0;
 
   for (const school of schools) {
-    const year = await prisma.academicYear.findFirst({
-      where: { schoolId: school.id, isActive: true },
+    const schoolLink = await prisma.academicYearSchool.findFirst({
+      where: { schoolId: school.id, isActive: true, deletedAt: null },
+      include: { academicYear: true },
     });
-    if (!year) continue;
+    if (!schoolLink) continue;
 
     const classrooms = await prisma.classroom.findMany({
       where: { schoolId: school.id, deletedAt: null },
@@ -389,13 +411,13 @@ async function main() {
     const classroomTeachers = await seedTeachersForSchool(school, classrooms);
 
     const calendarDays = await prisma.academicCalendarDay.findMany({
-      where: { academicYearId: year.id, deletedAt: null },
+      where: { academicYearSchoolId: schoolLink.id, deletedAt: null },
       orderBy: { date: "asc" },
       take: 8,
     });
 
     const existingEnrollments = await prisma.studentEnrollment.count({
-      where: { schoolId: school.id, academicYearId: year.id, deletedAt: null },
+      where: { schoolId: school.id, academicYearSchoolId: schoolLink.id, deletedAt: null },
     });
 
     if (existingEnrollments > 0) {
@@ -450,7 +472,7 @@ async function main() {
           data: {
             studentId: student.id,
             schoolId: school.id,
-            academicYearId: year.id,
+            academicYearSchoolId: schoolLink.id,
             classroomId: classroom.id,
             teacherId,
             status: "ACTIVE",

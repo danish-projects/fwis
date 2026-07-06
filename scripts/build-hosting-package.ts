@@ -7,18 +7,26 @@
  *
  * Requires a matching env file in the project root (e.g. .env.stage, .env.prod).
  * That file is used for the Next.js build (NEXT_PUBLIC_*) and copied to
- * hosting-build/.env for the server.
+ * hosting-build-<env>/.env for the server.
  *
- * Output: hosting-build/
+ * Output: hosting-build-<env>/  (e.g. hosting-build-stage, hosting-build-prod)
  */
 import { execSync } from "node:child_process";
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { config as loadDotenv } from "dotenv";
 
 const ROOT = process.cwd();
-const OUTPUT_DIR = path.join(ROOT, "hosting-build");
 const STANDALONE_DIR = path.join(ROOT, ".next", "standalone");
+
+function hostingOutputDir(envName: string): string {
+  return path.join(ROOT, `hosting-build-${envName}`);
+}
+
+function hostingZipPath(envName: string): string {
+  return path.join(ROOT, `hosting-build-${envName}.zip`);
+}
 
 const ENV_NAME_PATTERN = /^[a-zA-Z0-9][a-zA-Z0-9_-]*$/;
 
@@ -104,8 +112,180 @@ function copyDir(from: string, to: string) {
   fs.cpSync(from, to, { recursive: true });
 }
 
-function writeFile(relativePath: string, content: string) {
-  const target = path.join(OUTPUT_DIR, relativePath);
+const HOSTING_ENV_ALLOWLIST = new Set([".env", ".env.production.example"]);
+
+function isSensitiveEnvFile(name: string): boolean {
+  if (name === ".env" || name.startsWith(".env.")) return true;
+  // Build isolation may store `.env.prod` as `env.prod` in a temp folder.
+  return /^env(\.|$)/.test(name);
+}
+
+/** Recursively remove env files from a deploy folder (standalone may copy project-root .env*). */
+function stripEnvFilesFromDir(
+  dir: string,
+  keepBasenames: ReadonlySet<string> = new Set()
+): string[] {
+  const removed: string[] = [];
+  if (!fs.existsSync(dir)) return removed;
+
+  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+    const full = path.join(dir, entry.name);
+    if (entry.isDirectory()) {
+      if (
+        entry.name === ".hosting-env-hidden" ||
+        entry.name === "hosting-env-hidden"
+      ) {
+        fs.rmSync(full, { recursive: true, force: true });
+        removed.push(full);
+        continue;
+      }
+      removed.push(...stripEnvFilesFromDir(full, keepBasenames));
+      continue;
+    }
+    if (!isSensitiveEnvFile(entry.name) || keepBasenames.has(entry.name)) continue;
+    fs.rmSync(full, { force: true });
+    removed.push(full);
+  }
+
+  return removed;
+}
+
+function logRemovedEnvFiles(outputDir: string, removed: string[]) {
+  if (removed.length === 0) return;
+  console.log(`  Removed ${removed.length} stray env path(s) from package:`);
+  for (const file of removed) {
+    console.log(`    - ${path.relative(outputDir, file)}`);
+  }
+}
+
+/** Keep only the selected runtime .env (and optional example template). */
+function finalizeHostingEnvFiles(outputDir: string, envContent: string): string[] {
+  const removed = stripEnvFilesFromDir(outputDir, HOSTING_ENV_ALLOWLIST);
+  fs.writeFileSync(path.join(outputDir, ".env"), envContent, "utf8");
+  return removed;
+}
+
+function assertHostingEnvFiles(outputDir: string) {
+  const unexpected: string[] = [];
+
+  function walk(dir: string) {
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+      const full = path.join(dir, entry.name);
+      if (entry.isDirectory()) {
+        walk(full);
+        continue;
+      }
+      if (
+        isSensitiveEnvFile(entry.name) &&
+        !HOSTING_ENV_ALLOWLIST.has(entry.name)
+      ) {
+        unexpected.push(path.relative(outputDir, full));
+      }
+    }
+  }
+
+  walk(outputDir);
+  if (unexpected.length > 0) {
+    throw new Error(
+      `Hosting package still contains unexpected env files: ${unexpected.join(", ")}`
+    );
+  }
+}
+
+const BUILD_TIME_ENV_FILES = [
+  ".env",
+  ".env.local",
+  ".env.production",
+  ".env.production.local",
+] as const;
+
+/** Remove leftover hosting build artifacts from the repo and stale OS temp dirs. */
+function cleanupStaleHostingArtifacts() {
+  let removed = 0;
+
+  for (const name of fs.readdirSync(ROOT)) {
+    const full = path.join(ROOT, name);
+    const isStaleHostingDir =
+      /^hosting-build(?:-[a-zA-Z0-9_-]+)?\.old-\d+$/.test(name) ||
+      name === ".hosting-env-hidden";
+
+    if (!isStaleHostingDir) continue;
+    if (!fs.existsSync(full)) continue;
+
+    try {
+      fs.rmSync(full, { recursive: true, force: true, maxRetries: 2, retryDelay: 200 });
+      console.log(`  Removed stale ${name}`);
+      removed++;
+    } catch {
+      console.log(`  Could not remove stale ${name} (may be in use)`);
+    }
+  }
+
+  const tempRoot = os.tmpdir();
+  const maxAgeMs = 60 * 60 * 1000;
+  const now = Date.now();
+
+  for (const name of fs.readdirSync(tempRoot)) {
+    if (!name.startsWith("fwis-hosting-env-")) continue;
+
+    const full = path.join(tempRoot, name);
+    try {
+      const stat = fs.statSync(full);
+      if (!stat.isDirectory() || now - stat.mtimeMs < maxAgeMs) continue;
+      fs.rmSync(full, { recursive: true, force: true });
+      console.log(`  Removed stale temp ${name}`);
+      removed++;
+    } catch {
+      // ignore locked temp dirs
+    }
+  }
+
+  if (removed > 0) {
+    console.log(`  Cleaned ${removed} stale hosting artifact(s)\n`);
+  }
+}
+
+/**
+ * Hide every root .env* file during `next build` and expose only the selected
+ * environment via `.env.production.local` so stage/prod secrets never mix.
+ */
+function withIsolatedHostingBuildEnv<T>(envContent: string, fn: () => T): T {
+  // Outside the repo so Next.js file tracing cannot bundle other env files.
+  const hiddenDir = fs.mkdtempSync(path.join(os.tmpdir(), "fwis-hosting-env-"));
+  const moved: Array<{ original: string; hidden: string }> = [];
+  const toHide = new Set([...listHostingEnvFiles(), ...BUILD_TIME_ENV_FILES]);
+
+  for (const name of toHide) {
+    const original = path.join(ROOT, name);
+    if (!fs.existsSync(original) || !fs.statSync(original).isFile()) continue;
+
+    const hidden = path.join(hiddenDir, name);
+    fs.renameSync(original, hidden);
+    moved.push({ original, hidden });
+  }
+
+  const productionLocal = path.join(ROOT, ".env.production.local");
+  fs.writeFileSync(productionLocal, envContent, "utf8");
+
+  try {
+    const result = fn();
+    if (fs.existsSync(STANDALONE_DIR)) {
+      stripEnvFilesFromDir(STANDALONE_DIR);
+    }
+    return result;
+  } finally {
+    fs.rmSync(productionLocal, { force: true });
+    for (const { original, hidden } of moved) {
+      if (fs.existsSync(hidden)) {
+        fs.renameSync(hidden, original);
+      }
+    }
+    fs.rmSync(hiddenDir, { recursive: true, force: true });
+  }
+}
+
+function writeFile(outputDir: string, relativePath: string, content: string) {
+  const target = path.join(outputDir, relativePath);
   fs.mkdirSync(path.dirname(target), { recursive: true });
   fs.writeFileSync(target, content, "utf8");
 }
@@ -141,8 +321,8 @@ function resolvePackageDir(packageName: string): string | null {
   return null;
 }
 
-function copyPgRuntimePackages() {
-  const destNodeModules = path.join(OUTPUT_DIR, "node_modules");
+function copyPgRuntimePackages(outputDir: string) {
+  const destNodeModules = path.join(outputDir, "node_modules");
   fs.mkdirSync(destNodeModules, { recursive: true });
 
   for (const packageName of PG_RUNTIME_PACKAGES) {
@@ -157,12 +337,14 @@ function copyPgRuntimePackages() {
   console.log("  Copied complete pg runtime packages for standalone hosting");
 }
 
-/** Windows often locks hosting-build when a local server.js is still running. */
-function clearOutputDir() {
-  if (!fs.existsSync(OUTPUT_DIR)) return;
+/** Windows often locks the output folder when a local server.js is still running. */
+function clearOutputDir(outputDir: string) {
+  if (!fs.existsSync(outputDir)) return;
+
+  console.log(`  Removing existing ${path.basename(outputDir)}/ ...`);
 
   try {
-    fs.rmSync(OUTPUT_DIR, {
+    fs.rmSync(outputDir, {
       recursive: true,
       force: true,
       maxRetries: 3,
@@ -176,22 +358,26 @@ function clearOutputDir() {
     }
   }
 
-  const staleDir = `${OUTPUT_DIR}.old-${Date.now()}`;
-  fs.renameSync(OUTPUT_DIR, staleDir);
+  const staleDir = `${outputDir}.old-${Date.now()}`;
+  fs.renameSync(outputDir, staleDir);
   console.log(
-    `  Previous hosting-build was locked; moved to ${path.basename(staleDir)}`
+    `  Previous ${path.basename(outputDir)} was locked; moved to ${path.basename(staleDir)}`
   );
   console.log(
-    "  Tip: stop any local server.js from hosting-build before rebuilding."
+    `  Tip: stop any local server.js from ${path.basename(outputDir)} before rebuilding.`
   );
 }
 
 function main() {
   const { envName, envFilePath } = resolveHostingEnvFile();
+  const outputDir = hostingOutputDir(envName);
+  const outputFolderName = path.basename(outputDir);
 
   console.log("FWIS hosting package build\n");
+  cleanupStaleHostingArtifacts();
   console.log(`Environment: ${envName}`);
   console.log(`Env file:     ${path.basename(envFilePath)}`);
+  console.log(`Output:       ${outputFolderName}/`);
 
   // Load into this process so NEXT_PUBLIC_* are available to `next build`.
   const loaded = loadDotenv({ path: envFilePath, override: true });
@@ -200,9 +386,17 @@ function main() {
     process.exit(1);
   }
 
-  clearOutputDir();
+  const envContent = fs.readFileSync(envFilePath, "utf8");
 
-  run("npm run build");
+  clearOutputDir(outputDir);
+
+  console.log("\nRunning L1 BDD tests (mock data + typecheck)...");
+  run("npm run test:l1");
+
+  console.log("\nIsolating build env (only selected .env file is used) ...");
+  withIsolatedHostingBuildEnv(envContent, () => {
+    run("npm run build");
+  });
 
   if (!fs.existsSync(STANDALONE_DIR)) {
     throw new Error(
@@ -210,33 +404,33 @@ function main() {
     );
   }
 
-  console.log("\nPackaging hosting-build/ ...");
-  copyDir(STANDALONE_DIR, OUTPUT_DIR);
-  copyDir(path.join(ROOT, ".next", "static"), path.join(OUTPUT_DIR, ".next", "static"));
-  copyDir(path.join(ROOT, "public"), path.join(OUTPUT_DIR, "public"));
-  copyPgRuntimePackages();
+  console.log(`\nPackaging ${outputFolderName}/ ...`);
+  stripEnvFilesFromDir(STANDALONE_DIR);
+  copyDir(STANDALONE_DIR, outputDir);
+  copyDir(path.join(ROOT, ".next", "static"), path.join(outputDir, ".next", "static"));
+  copyDir(path.join(ROOT, "public"), path.join(outputDir, "public"));
+  copyPgRuntimePackages(outputDir);
 
   if (fs.existsSync(path.join(ROOT, "src", "generated", "prisma"))) {
     copyDir(
       path.join(ROOT, "src", "generated", "prisma"),
-      path.join(OUTPUT_DIR, "src", "generated", "prisma")
+      path.join(outputDir, "src", "generated", "prisma")
     );
   }
 
-  copyDir(path.join(ROOT, "prisma"), path.join(OUTPUT_DIR, "prisma"));
+  copyDir(path.join(ROOT, "prisma"), path.join(outputDir, "prisma"));
 
-  // Runtime env for the server (SmartASP reads .env beside server.js).
-  fs.copyFileSync(envFilePath, path.join(OUTPUT_DIR, ".env"));
-  console.log(`  Copied ${path.basename(envFilePath)} → hosting-build/.env`);
+  logRemovedEnvFiles(outputDir, stripEnvFilesFromDir(outputDir));
 
   if (fs.existsSync(path.join(ROOT, ".env.example"))) {
     fs.copyFileSync(
       path.join(ROOT, ".env.example"),
-      path.join(OUTPUT_DIR, ".env.production.example")
+      path.join(outputDir, ".env.production.example")
     );
   }
 
   writeFile(
+    outputDir,
     "start.sh",
     `#!/bin/sh
 cd "$(dirname "$0")"
@@ -248,6 +442,7 @@ exec node server.js
   );
 
   writeFile(
+    outputDir,
     "start.bat",
     `@echo off
 cd /d "%~dp0"
@@ -259,6 +454,7 @@ node server.js
   );
 
   writeFile(
+    outputDir,
     "web.config",
     `<?xml version="1.0" encoding="UTF-8"?>
 <configuration>
@@ -309,6 +505,7 @@ node server.js
   );
 
   writeFile(
+    outputDir,
     "web.config.env.example",
     `# SmarterASP.NET / IIS — copy values into web.config <environmentVariables>
 # or create a .env file next to server.js (SmarterASP Next.js guide supports .env).
@@ -332,10 +529,11 @@ PII_ENCRYPTION_KEY=base64-32-byte-key
   );
 
   writeFile(
+    outputDir,
     "HOSTING.md",
     `# FWIS — Shared hosting deployment
 
-This folder is a **standalone Node.js build** of FWIS. Upload the entire \`hosting-build\` directory to your server.
+This folder is a **standalone Node.js build** of FWIS. Upload the entire \`${outputFolderName}\` directory to your server.
 
 ## Requirements
 
@@ -405,16 +603,16 @@ This build includes \`web.config\` for IIS **httpPlatformHandler** (required on 
 3. Run on **Windows** (SmarterASP runs Windows; avoids SWC/native module mismatches):
 
 \`\`\`bash
-npm run build:hosting -- stage   # uses .env.stage → hosting-build/.env
-npm run build:hosting -- prod    # uses .env.prod  → hosting-build/.env
+npm run build:hosting -- stage   # uses .env.stage → hosting-build-stage/
+npm run build:hosting -- prod    # uses .env.prod  → hosting-build-prod/
 \`\`\`
 
 The script exits without building if the name does not match an existing \`.env.<name>\` file.
 
 ### Upload via FTP
 
-1. Upload \`hosting-build.zip\` to your site root, then unzip in **Control Panel → File Manager**,  
-   **or** upload the entire \`hosting-build/\` folder contents via FTP (FileZilla).
+1. Upload \`hosting-build-${envName}.zip\` to your site root, then unzip in **Control Panel → File Manager**,  
+   **or** upload the entire \`${outputFolderName}/\` folder contents via FTP (FileZilla).
 2. Ensure these files are in the **site root** (same folder as \`web.config\`):
    \`server.js\`, \`web.config\`, \`.next/\`, \`node_modules/\`, \`public/\`
 3. Create a \`logs/\` folder (for \`web.config\` stdout logging) if it does not exist.
@@ -455,7 +653,7 @@ KB: [Next.js on SmarterASP](https://www.smarterasp.net/support/kb/a2233/how-to-p
 ## Updating
 
 1. Build locally: \`npm run build:hosting -- stage\` (or \`prod\`)
-2. Upload the new \`hosting-build\` contents (replace files), including \`.env\`
+2. Upload the new \`${outputFolderName}\` contents (replace files), including \`.env\`
 3. Restart the Node.js app on the host
 
 ## Folder contents
@@ -470,13 +668,13 @@ KB: [Next.js on SmarterASP](https://www.smarterasp.net/support/kb/a2233/how-to-p
 | \`src/generated/prisma/\` | Prisma client (if present) |
 | \`node_modules/\` | Minimal runtime dependencies |
 | \`web.config.env.example\` | Env var template for IIS / .env |
-| \`.env\` | Copied from \`.env.${envName}\` at build time |
+| \`.env\` | Runtime secrets for this environment only (from \`.env.${envName}\`) |
 
 Built: ${new Date().toISOString()} (env: ${envName})
 `
   );
 
-  const pkgPath = path.join(OUTPUT_DIR, "package.json");
+  const pkgPath = path.join(outputDir, "package.json");
   const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf8"));
   pkg.scripts = {
     ...pkg.scripts,
@@ -485,38 +683,44 @@ Built: ${new Date().toISOString()} (env: ${envName})
   pkg.devDependencies = undefined;
   fs.writeFileSync(pkgPath, `${JSON.stringify(pkg, null, 2)}\n`, "utf8");
 
+  logRemovedEnvFiles(outputDir, finalizeHostingEnvFiles(outputDir, envContent));
+  assertHostingEnvFiles(outputDir);
+  console.log(
+    `  Wrote ${outputFolderName}/.env only (from ${path.basename(envFilePath)})`
+  );
+
   try {
-    fs.chmodSync(path.join(OUTPUT_DIR, "start.sh"), 0o755);
+    fs.chmodSync(path.join(outputDir, "start.sh"), 0o755);
   } catch {
     // Windows may not support chmod
   }
 
   const sizeMb =
     Math.round(
-      getDirSize(OUTPUT_DIR) / (1024 * 1024)
+      getDirSize(outputDir) / (1024 * 1024)
     );
 
   console.log("\nHosting package ready:");
-  console.log(`  ${OUTPUT_DIR}`);
+  console.log(`  ${outputDir}`);
   console.log(`  Environment: ${envName} (from ${path.basename(envFilePath)})`);
   console.log(`  Approx. size: ${sizeMb} MB`);
   console.log("\nNext steps:");
-  console.log("  1. Upload hosting-build/ to your server (includes .env)");
+  console.log(`  1. Upload ${outputFolderName}/ to your server (includes .env)`);
   console.log("  2. Run ./start.sh or point Node app to server.js");
   console.log("  3. See HOSTING.md for cPanel / shared hosting details");
 
-  const zipPath = path.join(ROOT, "hosting-build.zip");
+  const zipPath = hostingZipPath(envName);
   try {
     if (process.platform === "win32") {
       if (fs.existsSync(zipPath)) fs.rmSync(zipPath, { force: true });
       execSync(
-        `powershell -NoProfile -Command "Compress-Archive -Path '${OUTPUT_DIR.replace(/'/g, "''")}\\*' -DestinationPath '${zipPath.replace(/'/g, "''")}' -Force"`,
+        `powershell -NoProfile -Command "Compress-Archive -Path '${outputDir.replace(/'/g, "''")}\\*' -DestinationPath '${zipPath.replace(/'/g, "''")}' -Force"`,
         { stdio: "inherit", cwd: ROOT }
       );
       console.log(`\nZip archive: ${zipPath}`);
     }
   } catch {
-    console.log("\nTip: zip hosting-build/ manually for upload if needed.");
+    console.log(`\nTip: zip ${outputFolderName}/ manually for upload if needed.`);
   }
 }
 

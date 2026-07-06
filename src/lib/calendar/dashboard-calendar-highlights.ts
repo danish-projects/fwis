@@ -111,12 +111,12 @@ export function buildDashboardCalendarHighlights(
 }
 
 export async function fetchDashboardCalendarHighlights(
-  academicYearId: string | null | undefined
+  academicYearSchoolId: string | null | undefined
 ): Promise<DashboardCalendarHighlights | null> {
-  if (!academicYearId) return null;
+  if (!academicYearSchoolId) return null;
 
   const calendarDays = await prisma.academicCalendarDay.findMany({
-    where: { academicYearId, deletedAt: null },
+    where: { academicYearSchoolId, deletedAt: null },
     orderBy: { date: "asc" },
     select: {
       date: true,

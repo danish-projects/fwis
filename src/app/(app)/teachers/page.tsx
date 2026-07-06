@@ -1,8 +1,9 @@
 import Link from "next/link";
 import { Plus, Search } from "lucide-react";
-import { getTeacherFormOptions, getTeachers } from "@/actions/teachers";
+import { getTeachers } from "@/actions/teachers";
 import { getSessionUser, requirePermission } from "@/lib/auth/session";
 import { hasPermission } from "@/lib/auth/permissions";
+import { getSelectedSchool } from "@/lib/school/resolve-school";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
@@ -14,7 +15,6 @@ type PageProps = {
   searchParams: Promise<{
     page?: string;
     search?: string;
-    schoolId?: string;
     gender?: string;
     isActive?: string;
   }>;
@@ -37,6 +37,7 @@ export default async function TeachersPage({ searchParams }: PageProps) {
   await requirePermission("teachers:read");
   const user = await getSessionUser();
   const canCreate = user && hasPermission(user.roles, "teachers:create");
+  const selectedSchool = user ? await getSelectedSchool(user) : null;
 
   const params = await searchParams;
   const page = Number(params.page) || 1;
@@ -48,25 +49,18 @@ export default async function TeachersPage({ searchParams }: PageProps) {
         ? false
         : undefined;
 
-  const [{ data: teachers, meta }, { schools }] = await Promise.all([
-    getTeachers({
-      page,
-      search: params.search,
-      schoolId: params.schoolId,
-      gender,
-      isActive,
-    }),
-    getTeacherFormOptions(),
-  ]);
+  const { data: teachers, meta } = await getTeachers({
+    page,
+    search: params.search,
+    gender,
+    isActive,
+  });
 
   const queryBase = {
     search: params.search,
-    schoolId: params.schoolId,
     gender: params.gender,
     isActive: params.isActive,
   };
-
-  const showSchoolFilter = schools.length > 1;
 
   return (
     <div className="space-y-6">
@@ -75,6 +69,7 @@ export default async function TeachersPage({ searchParams }: PageProps) {
           <h1 className="text-2xl font-bold md:text-3xl">Teachers</h1>
           <p className="text-muted-foreground">
             Manage teachers and grade assignments
+            {selectedSchool ? ` · ${selectedSchool.name}` : ""}
           </p>
         </div>
         {canCreate && (
@@ -99,20 +94,6 @@ export default async function TeachersPage({ searchParams }: PageProps) {
                 className="pl-9"
               />
             </div>
-            {showSchoolFilter && (
-              <select
-                name="schoolId"
-                defaultValue={params.schoolId ?? ""}
-                className="h-10 rounded-md border border-input bg-background px-3 text-sm"
-              >
-                <option value="">All schools</option>
-                {schools.map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {s.name}
-                  </option>
-                ))}
-              </select>
-            )}
             <select
               name="gender"
               defaultValue={gender ?? ""}
@@ -192,7 +173,9 @@ export default async function TeachersPage({ searchParams }: PageProps) {
                 {teachers.length === 0 && (
                   <tr>
                     <td colSpan={8} className="py-8 text-center text-muted-foreground">
-                      No teachers found.
+                      {selectedSchool
+                        ? "No teachers found for this school."
+                        : "Select a school to view teachers."}
                     </td>
                   </tr>
                 )}

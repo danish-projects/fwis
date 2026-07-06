@@ -5,19 +5,24 @@ import {
   ACADEMIC_YEAR_COOKIE,
   type AcademicYearSummary,
 } from "@/lib/academic-year/constants";
-import { findCurrentAcademicYearForSchool } from "@/lib/academic-year/find-current-year";
+import { findCurrentAcademicYearSchoolForSchool } from "@/lib/academic-year/find-current-year";
 import { listAcademicYearsForUser } from "@/lib/academic-year/list-years";
 
 async function assertUserCanAccessYear(user: AuthUser, yearId: string) {
   const year = await prisma.academicYear.findFirst({
     where: { id: yearId, deletedAt: null },
-    include: { school: { select: { name: true } } },
+    include: {
+      schoolLinks: {
+        where: { deletedAt: null },
+        select: { schoolId: true },
+      },
+    },
   });
   if (!year) return null;
 
   if (
     !user.roles.includes("SUPER_ADMIN") &&
-    !user.schoolIds.includes(year.schoolId)
+    !year.schoolLinks.some((link) => user.schoolIds.includes(link.schoolId))
   ) {
     return null;
   }
@@ -33,11 +38,9 @@ async function defaultYearForUser(
 
   const primarySchoolId = user.schoolIds[0];
   if (primarySchoolId) {
-    const current = await findCurrentAcademicYearForSchool(primarySchoolId);
+    const current = await findCurrentAcademicYearSchoolForSchool(primarySchoolId);
     if (current) {
-      const match =
-        available.find((y) => y.id === current.id) ??
-        available.find((y) => y.name === current.name);
+      const match = available.find((y) => y.id === current.academicYearId);
       if (match) return match;
     }
   }
@@ -49,9 +52,6 @@ async function defaultYearForUser(
     (y) => y.startDate <= today && y.endDate >= today
   );
   if (byDate) return byDate;
-
-  const byActive = available.find((y) => y.isActive);
-  if (byActive) return byActive;
 
   return available[0];
 }
@@ -66,9 +66,7 @@ export async function resolveSelectedAcademicYear(
   if (cookieYearId) {
     const allowed = await assertUserCanAccessYear(user, cookieYearId);
     if (allowed) {
-      const match =
-        available.find((y) => y.id === allowed.id) ??
-        available.find((y) => y.name === allowed.name);
+      const match = available.find((y) => y.id === allowed.id);
       if (match) return match;
     }
   }
@@ -84,26 +82,29 @@ export async function getSelectedAcademicYear(
   return resolveSelectedAcademicYear(user, cookieYearId);
 }
 
-export async function resolveAcademicYearForSchool(
+export async function resolveAcademicYearSchoolForSchool(
   schoolId: string,
   selectedYear: AcademicYearSummary | null
 ) {
   if (selectedYear) {
-    const schoolYear = await prisma.academicYear.findFirst({
+    const schoolYear = await prisma.academicYearSchool.findFirst({
       where: {
         schoolId,
-        name: selectedYear.name,
+        academicYearId: selectedYear.id,
         deletedAt: null,
       },
-      orderBy: { startDate: "desc" },
+      include: { academicYear: true },
     });
     if (schoolYear) return schoolYear;
   }
 
-  return findCurrentAcademicYearForSchool(schoolId);
+  return findCurrentAcademicYearSchoolForSchool(schoolId);
 }
 
-export async function resolveAcademicYearIdsForSchools(
+/** @deprecated Use resolveAcademicYearSchoolForSchool */
+export const resolveAcademicYearForSchool = resolveAcademicYearSchoolForSchool;
+
+export async function resolveAcademicYearSchoolIdsForSchools(
   schoolIds: string[],
   selectedYear: AcademicYearSummary | null
 ) {
@@ -111,27 +112,29 @@ export async function resolveAcademicYearIdsForSchools(
   if (schoolIds.length === 0) return map;
 
   if (selectedYear) {
-    const years = await prisma.academicYear.findMany({
+    const links = await prisma.academicYearSchool.findMany({
       where: {
         schoolId: { in: schoolIds },
-        name: selectedYear.name,
+        academicYearId: selectedYear.id,
         deletedAt: null,
       },
-      orderBy: { startDate: "desc" },
       select: { id: true, schoolId: true },
     });
-    for (const year of years) {
-      if (!map.has(year.schoolId)) map.set(year.schoolId, year.id);
+    for (const link of links) {
+      map.set(link.schoolId, link.id);
     }
   }
 
   const missing = schoolIds.filter((id) => !map.has(id));
   await Promise.all(
     missing.map(async (schoolId) => {
-      const year = await findCurrentAcademicYearForSchool(schoolId);
-      if (year) map.set(schoolId, year.id);
+      const link = await findCurrentAcademicYearSchoolForSchool(schoolId);
+      if (link) map.set(schoolId, link.id);
     })
   );
 
   return map;
 }
+
+/** @deprecated Use resolveAcademicYearSchoolIdsForSchools */
+export const resolveAcademicYearIdsForSchools = resolveAcademicYearSchoolIdsForSchools;

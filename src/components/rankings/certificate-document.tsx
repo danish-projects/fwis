@@ -1,7 +1,6 @@
 import type { RankCertificateData } from "@/lib/rankings/certificate-types";
 import { CertificateRankDescription } from "@/components/rankings/certificate-rank-description";
-
-const CERTIFICATE_TEMPLATE = "/certificates/rank-certificate-template.png";
+import { CERTIFICATE_TEMPLATE_SRC } from "@/lib/rankings/certificate-template";
 
 type CertificateDocumentProps = {
   data: RankCertificateData;
@@ -13,7 +12,7 @@ export function CertificateDocument({ data }: CertificateDocumentProps) {
     <article className="certificate-sheet">
       <div className="certificate-frame">
         <img
-          src={CERTIFICATE_TEMPLATE}
+          src={CERTIFICATE_TEMPLATE_SRC}
           alt=""
           className="certificate-background"
           draggable={false}

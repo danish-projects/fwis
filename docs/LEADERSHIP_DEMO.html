@@ -118,6 +118,34 @@
     .dots { display: flex; gap: 6px; justify-content: center; margin-top: 4px; }
     .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--border); cursor: pointer; border: none; padding: 0; }
     .dot.active { background: var(--accent); }
+    .checklist-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px 28px; margin-top: 8px; }
+    .checklist-section h3 { margin-top: 0; }
+    .checklist {
+      list-style: none;
+      margin: 0;
+      padding: 0;
+      font-size: 0.8125rem;
+      line-height: 1.45;
+    }
+    .checklist li {
+      display: flex;
+      gap: 10px;
+      align-items: flex-start;
+      padding: 6px 0;
+      border-bottom: 1px solid rgba(51, 65, 85, 0.5);
+    }
+    .checklist li:last-child { border-bottom: none; }
+    .checklist input[type="checkbox"] {
+      margin-top: 3px;
+      width: 15px;
+      height: 15px;
+      flex-shrink: 0;
+      accent-color: var(--accent-dim);
+      cursor: pointer;
+    }
+    .checklist label { cursor: pointer; flex: 1; color: #e2e8f0; }
+    .checklist code { font-size: 0.75rem; color: var(--accent); }
+    .checklist .hint { display: block; color: var(--muted); font-size: 0.75rem; margin-top: 2px; }
     @media (max-width: 900px) {
       .slide { padding: 32px 24px 96px; }
       .two-col, .three-col, .four-col { grid-template-columns: 1fr; }
@@ -137,6 +165,7 @@
         <span class="badge">Student → Enrollment</span>
         <span class="badge">Attendance · Behavior · Assessments</span>
         <span class="badge">Role-based access</span>
+        <span class="badge">HTTPS &amp; encryption</span>
       </div>
     </section>
 
@@ -282,7 +311,93 @@ flowchart TB
       </div>
     </section>
 
-    <section class="slide title-slide" data-slide="8">
+    <section class="slide" data-slide="8">
+      <h2 class="slide-title">Security — in plain language</h2>
+      <p class="slide-subtitle">Think of student data like school records in a locked office. FWIS protects data on the way, at rest, and inside the app.</p>
+      <div class="four-col">
+        <div class="card">
+          <strong>HTTPS (the lock in the browser)</strong>
+          <p>Like a <em>sealed envelope</em> — nobody can read what you send while it travels. Login, grades, and attendance all use HTTPS.</p>
+        </div>
+        <div class="card">
+          <strong>Encryption in transit</strong>
+          <p>Data is <em>scrambled while moving</em> between your computer and our servers (TLS). Same idea as HTTPS — safe on the road.</p>
+        </div>
+        <div class="card">
+          <strong>Encryption at rest</strong>
+          <p>Sensitive papers stay in a <em>locked filing cabinet</em>. Student private details (DOB, parent phone, address) are encrypted in the database.</p>
+        </div>
+        <div class="card">
+          <strong>App security</strong>
+          <p>Only staff with the <em>right key</em> open the right room. Sign-in required; each role sees only their school/grade; important actions are logged.</p>
+        </div>
+      </div>
+      <div class="two-col" style="margin-top: 16px;">
+        <div class="card">
+          <strong>Input checks</strong>
+          <p>We verify every form before saving — reject bad or suspicious entries. Login attempts are limited to slow down password guessing.</p>
+        </div>
+        <div class="card">
+          <strong>One-line summary</strong>
+          <p>Protected <strong>on the way</strong> (HTTPS) · <strong>at rest</strong> (encrypted student PII) · <strong>inside the app</strong> (roles, login, validation).</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="slide" data-slide="9">
+      <h2 class="slide-title">Demo coverage checklist</h2>
+      <p class="slide-subtitle">Use this slide during prep or live demo — check items off as you go. Paths are app routes; switch <strong>School</strong> and <strong>Academic Year</strong> in the sidebar first.</p>
+      <div class="checklist-grid">
+        <div class="checklist-section">
+          <h3>Global · Dashboards</h3>
+          <ul class="checklist">
+            <li><input type="checkbox" id="c-school" /><label for="c-school"><strong>School switcher</strong> <code>sidebar</code><span class="hint">Super Admin — Houston vs Chicago; list pages filter to selected school</span></label></li>
+            <li><input type="checkbox" id="c-year" /><label for="c-year"><strong>Academic year switcher</strong> <code>sidebar</code><span class="hint">Calendar, enrollments, rankings, lesson plans follow selected year</span></label></li>
+            <li><input type="checkbox" id="c-dash-sa" /><label for="c-dash-sa"><strong>Super Admin dashboard</strong> <code>/dashboard/super-admin</code><span class="hint">Nationwide stats, top schools, Sunday attendance widget, calendar highlights</span></label></li>
+            <li><input type="checkbox" id="c-dash-admin" /><label for="c-dash-admin"><strong>School Admin dashboard</strong> <code>/dashboard/school-admin</code><span class="hint">Students by grade, behavior at-risk, school-scoped widgets</span></label></li>
+            <li><input type="checkbox" id="c-dash-teacher" /><label for="c-dash-teacher"><strong>Teacher dashboard</strong> <code>/dashboard/teacher</code><span class="hint">My grade stats, behavior, attendance highlights</span></label></li>
+          </ul>
+          <h3>Setup</h3>
+          <ul class="checklist">
+            <li><input type="checkbox" id="c-schools" /><label for="c-schools"><strong>Schools</strong> <code>/schools</code><span class="hint">List with FWIS code (e.g. FWIS-HOU); detail &amp; edit</span></label></li>
+            <li><input type="checkbox" id="c-years" /><label for="c-years"><strong>Academic years</strong> <code>/academic-years</code><span class="hint">One global year per name; edit links schools via checkboxes; FWIS Docs folder on year</span></label></li>
+            <li><input type="checkbox" id="c-cal" /><label for="c-cal"><strong>Calendar</strong> <code>/calendar</code><span class="hint">Sunday list; session types (Instructional, Quiz 1–5, Holiday, Final); bulk generate</span></label></li>
+            <li><input type="checkbox" id="c-grades" /><label for="c-grades"><strong>Grades / classrooms</strong> <code>/grades</code><span class="hint">Grade 1–6 × Boys/Girls per selected school; create &amp; assign teachers</span></label></li>
+            <li><input type="checkbox" id="c-teachers" /><label for="c-teachers"><strong>Teachers</strong> <code>/teachers</code><span class="hint">Per-school list; gender → Boys/Girls grade assignment; one grade per teacher</span></label></li>
+            <li><input type="checkbox" id="c-scale" /><label for="c-scale"><strong>Grading scale</strong> <code>/grading-scale</code><span class="hint">Letter-grade thresholds (A/B/C…)</span></label></li>
+            <li><input type="checkbox" id="c-backup" /><label for="c-backup"><strong>Data backup</strong> <code>/backup</code><span class="hint">Export school year workbook (Super Admin / School Admin)</span></label></li>
+          </ul>
+        </div>
+        <div class="checklist-section">
+          <h3>Students</h3>
+          <ul class="checklist">
+            <li><input type="checkbox" id="c-students" /><label for="c-students"><strong>Students</strong> <code>/students</code><span class="hint">Global records; search; export; student number; encrypted PII</span></label></li>
+            <li><input type="checkbox" id="c-student-profile" /><label for="c-student-profile"><strong>Student profile</strong> <code>/students/[id]/profile</code><span class="hint">Year-by-year transcript view, attendance &amp; assessment history</span></label></li>
+            <li><input type="checkbox" id="c-enroll" /><label for="c-enroll"><strong>Enrollments</strong> <code>/enrollments</code><span class="hint">Link student + year + grade + teacher; filter by grade &amp; status</span></label></li>
+          </ul>
+          <h3>Classroom · Sunday operations</h3>
+          <ul class="checklist">
+            <li><input type="checkbox" id="c-att" /><label for="c-att"><strong>Attendance</strong> <code>/attendance</code> · <code>/teacher/attendance</code><span class="hint">Pick grade → mark P / A / T per student per Sunday; behavior on same screen</span></label></li>
+            <li><input type="checkbox" id="c-consolidate" /><label for="c-consolidate"><strong>Consolidate attendance</strong> <code>/attendance/consolidate</code><span class="hint">Matrix: students × Sundays; filter by grade &amp; session</span></label></li>
+            <li><input type="checkbox" id="c-assess" /><label for="c-assess"><strong>Assessments</strong> <code>/assessments</code> · <code>/teacher/assessments</code><span class="hint">Score grid: Quiz 1–5, midterm project, final exam</span></label></li>
+            <li><input type="checkbox" id="c-lesson" /><label for="c-lesson"><strong>Lesson plans</strong> <code>/lesson-plans</code><span class="hint">Google Drive PDFs from FWIS Docs/{year}/Lesson Plans/{grade}; week picker</span></label></li>
+            <li><input type="checkbox" id="c-transcript" /><label for="c-transcript"><strong>Transcript</strong> <code>/transcript</code><span class="hint">Printable class transcript; green View Transcript button</span></label></li>
+            <li><input type="checkbox" id="c-rankings" /><label for="c-rankings"><strong>Rankings</strong> <code>/rankings</code><span class="hint">Class rank by final %; Export Certificate (PDF)</span></label></li>
+          </ul>
+          <h3>Admin · Security talking points</h3>
+          <ul class="checklist">
+            <li><input type="checkbox" id="c-users" /><label for="c-users"><strong>Users &amp; roles</strong> <code>/users</code><span class="hint">Super Admin, School Admin, Teacher, Read-only; school assignment</span></label></li>
+            <li><input type="checkbox" id="c-sec-https" /><label for="c-sec-https"><strong>HTTPS &amp; encryption in transit</strong><span class="hint">Lock icon in browser; TLS for all traffic</span></label></li>
+            <li><input type="checkbox" id="c-sec-rest" /><label for="c-sec-rest"><strong>Encryption at rest</strong><span class="hint">Student DOB, parent phone, address encrypted in DB</span></label></li>
+            <li><input type="checkbox" id="c-sec-roles" /><label for="c-sec-roles"><strong>Role-based access</strong><span class="hint">Teachers see only their grade; admins see their school</span></label></li>
+            <li><input type="checkbox" id="c-sec-audit" /><label for="c-sec-audit"><strong>Audit log</strong><span class="hint">Super Admin dashboard — recent activity trail</span></label></li>
+          </ul>
+        </div>
+      </div>
+      <p style="margin-top: 16px; font-size: 0.8125rem; color: var(--muted);">Tip: Demo flow = Setup (year → calendar → grades → teachers) → People (student → enrollment) → Sunday (attendance → assessments → rankings/transcript).</p>
+    </section>
+
+    <section class="slide title-slide" data-slide="10">
       <h2 class="slide-title">Live demo</h2>
       <p class="slide-subtitle">Run <code>npm run setup</code> once, then walk through the hierarchy in 10 minutes.</p>
       <table style="max-width: 720px; margin: 0 auto;">
@@ -304,7 +419,7 @@ flowchart TB
   <nav class="nav-bar" aria-label="Slide navigation">
     <button type="button" id="prevBtn" disabled aria-label="Previous slide">Previous</button>
     <div class="progress">
-      <span id="counter">1 / 8</span>
+      <span id="counter">1 / 10</span>
       <div class="dots" id="dots"></div>
     </div>
     <button type="button" id="nextBtn" class="primary" aria-label="Next slide">Next</button>

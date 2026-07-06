@@ -91,7 +91,7 @@ export async function getDashboardAttendanceWidgetData(
 
       const calendarDays = await prisma.academicCalendarDay.findMany({
         where: {
-          academicYearId: activeYear.id,
+          academicYearSchoolId: activeYear.id,
           deletedAt: null,
           sessionType: { in: ATTENDANCE_MARKABLE_SESSION_TYPES },
         },
@@ -101,7 +101,7 @@ export async function getDashboardAttendanceWidgetData(
       const enrollments = await prisma.studentEnrollment.findMany({
         where: {
           schoolId: school.id,
-          academicYearId: activeYear.id,
+          academicYearSchoolId: activeYear.id,
           status: "ACTIVE",
           deletedAt: null,
           ...(classroomIds?.length ? { classroomId: { in: classroomIds } } : {}),

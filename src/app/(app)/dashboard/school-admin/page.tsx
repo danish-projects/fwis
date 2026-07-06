@@ -32,7 +32,7 @@ export default async function SchoolAdminDashboardPage() {
   const enrollmentWhere = {
     ...schoolFilter,
     status: "ACTIVE" as const,
-    ...(schoolYear ? { academicYearId: schoolYear.id } : {}),
+    ...(schoolYear ? { academicYearSchoolId: schoolYear.id } : {}),
     ...sectionScope,
   };
 

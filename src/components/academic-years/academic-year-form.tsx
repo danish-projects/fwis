@@ -10,13 +10,15 @@ type FormOptions = Awaited<
   ReturnType<typeof import("@/actions/academic-years").getAcademicYearFormOptions>
 >;
 
+export type AcademicYearFormValues = AcademicYearInput;
+
 type AcademicYearFormProps = {
   options: FormOptions;
-  defaultValues?: Partial<AcademicYearInput>;
-  onSubmit: (data: AcademicYearInput) => Promise<void>;
+  defaultValues?: Partial<AcademicYearFormValues> & { linkedSchoolIds?: string[] };
+  onSubmit: (data: AcademicYearFormValues) => Promise<void>;
   submitLabel: string;
   cancelHref: string;
-  showGenerateCalendar?: boolean;
+  mode?: "create" | "edit";
 };
 
 export function AcademicYearForm({
@@ -25,16 +27,21 @@ export function AcademicYearForm({
   onSubmit,
   submitLabel,
   cancelHref,
-  showGenerateCalendar = true,
+  mode = "create",
 }: AcademicYearFormProps) {
+  const linkedSchoolIds =
+    defaultValues?.linkedSchoolIds ?? defaultValues?.schoolIds ?? [];
+
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     const form = new FormData(e.currentTarget);
     await onSubmit({
-      schoolId: form.get("schoolId") as string,
+      schoolIds: form.getAll("schoolIds") as string[],
       name: form.get("name") as string,
       startDate: form.get("startDate") as string,
       endDate: form.get("endDate") as string,
+      docsDriveFolderId:
+        (form.get("docsDriveFolderId") as string) || undefined,
       isActive: form.get("isActive") === "on",
       generateCalendar: form.get("generateCalendar") === "on",
     });
@@ -49,24 +56,6 @@ export function AcademicYearForm({
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
-      <div className="space-y-2">
-        <Label htmlFor="schoolId">School *</Label>
-        <select
-          id="schoolId"
-          name="schoolId"
-          required
-          defaultValue={defaultValues?.schoolId}
-          className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-        >
-          <option value="">Select school</option>
-          {options.schools.map((s) => (
-            <option key={s.id} value={s.id}>
-              {s.name}
-            </option>
-          ))}
-        </select>
-      </div>
-
       <div className="space-y-2">
         <Label htmlFor="name">Academic Year Name *</Label>
         <Input
@@ -101,26 +90,85 @@ export function AcademicYearForm({
         </div>
       </div>
 
-      <label className="flex items-center gap-2 text-sm">
-        <input
-          type="checkbox"
-          name="isActive"
-          defaultChecked={defaultValues?.isActive ?? false}
-          className="rounded"
-        />
-        Set as active year for this school
-      </label>
-
-      {showGenerateCalendar && (
-        <label className="flex items-center gap-2 text-sm">
-          <input
-            type="checkbox"
-            name="generateCalendar"
-            defaultChecked={defaultValues?.generateCalendar ?? true}
-            className="rounded"
+      <div className="space-y-3 rounded-lg border bg-muted/30 p-4">
+        <div>
+          <p className="font-medium">FWIS Docs (Google Drive)</p>
+          <p className="text-sm text-muted-foreground">
+            One folder per academic year under FWIS Docs (e.g.{" "}
+            <span className="font-medium text-foreground">2025-2026</span>).
+            Lesson plans live in{" "}
+            <span className="font-medium text-foreground">Lesson Plans</span>{" "}
+            with a subfolder per grade. Paste the year folder ID from the Drive
+            URL after <code className="text-xs">/folders/</code>.
+          </p>
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="docsDriveFolderId">Google Drive Folder ID</Label>
+          <Input
+            id="docsDriveFolderId"
+            name="docsDriveFolderId"
+            defaultValue={defaultValues?.docsDriveFolderId ?? ""}
+            placeholder="e.g. 1ABCdefGHIjkLmNoPqRsTuVwXyZ"
           />
-          Generate Sunday calendar days from date range
-        </label>
+        </div>
+      </div>
+
+      <div className="space-y-3 rounded-lg border p-4">
+        <div>
+          <p className="font-medium">Schools</p>
+          <p className="text-sm text-muted-foreground">
+            {mode === "edit"
+              ? "Check schools that participate in this academic year."
+              : "Select schools to link when creating this year."}
+          </p>
+        </div>
+        <div className="grid gap-2 sm:grid-cols-2">
+          {options.schools.map((school) => (
+            <label
+              key={school.id}
+              className="flex cursor-pointer items-center gap-2 rounded-md border px-3 py-2 text-sm hover:bg-muted/50"
+            >
+              <input
+                type="checkbox"
+                name="schoolIds"
+                value={school.id}
+                defaultChecked={linkedSchoolIds.includes(school.id)}
+                className="rounded"
+              />
+              <span className="font-mono text-xs text-muted-foreground">
+                {school.code}
+              </span>
+              <span>{school.name}</span>
+            </label>
+          ))}
+        </div>
+        {options.schools.length === 0 && (
+          <p className="text-sm text-muted-foreground">No schools available.</p>
+        )}
+      </div>
+
+      {mode === "create" && (
+        <>
+          <label className="flex items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              name="isActive"
+              defaultChecked={defaultValues?.isActive ?? false}
+              className="rounded"
+            />
+            Set as active year for selected schools
+          </label>
+
+          <label className="flex items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              name="generateCalendar"
+              defaultChecked={defaultValues?.generateCalendar ?? true}
+              className="rounded"
+            />
+            Generate Sunday calendar days from date range
+          </label>
+        </>
       )}
 
       <div className="flex gap-3 pt-2">

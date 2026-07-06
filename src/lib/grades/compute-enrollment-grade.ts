@@ -85,7 +85,7 @@ async function computeMetricsForEnrollment(enrollmentId: string) {
           where: { deletedAt: null },
           select: { type: true, score: true },
         },
-        academicYear: {
+        academicYearSchool: {
           include: {
             calendarDays: {
               where: { deletedAt: null },
@@ -108,7 +108,7 @@ async function computeMetricsForEnrollment(enrollmentId: string) {
   const metrics = computeEnrollmentGradeMetrics(
     {
       attendance: enrollment.attendance,
-      calendarDays: enrollment.academicYear.calendarDays,
+      calendarDays: enrollment.academicYearSchool.calendarDays,
       scores,
     },
     scale
@@ -117,7 +117,7 @@ async function computeMetricsForEnrollment(enrollmentId: string) {
   return {
     enrollmentId,
     classroomId: enrollment.classroomId,
-    academicYearId: enrollment.academicYearId,
+    academicYearSchoolId: enrollment.academicYearSchoolId,
     ...metrics,
   };
 }
@@ -150,7 +150,7 @@ export async function computeAndSaveEnrollmentGrade(
   });
 
   if (!options?.skipRankRecompute) {
-    await recomputeClassroomRanks(metrics.classroomId, metrics.academicYearId);
+    await recomputeClassroomRanks(metrics.classroomId, metrics.academicYearSchoolId);
   }
 
   return metrics;
@@ -159,13 +159,13 @@ export async function computeAndSaveEnrollmentGrade(
 /** Re-rank from stored final grades only — no full metric recompute. */
 export async function recomputeClassroomRanks(
   classroomId: string,
-  academicYearId: string
+  academicYearSchoolId: string
 ) {
   const grades = await prisma.enrollmentFinalGrade.findMany({
     where: {
       enrollment: {
         classroomId,
-        academicYearId,
+        academicYearSchoolId,
         deletedAt: null,
         status: "ACTIVE",
       },
@@ -201,15 +201,15 @@ export async function recomputeGradesForEnrollments(enrollmentIds: string[]) {
         skipRankRecompute: true,
       });
       if (metrics) {
-        classroomKeys.add(`${metrics.classroomId}:${metrics.academicYearId}`);
+        classroomKeys.add(`${metrics.classroomId}:${metrics.academicYearSchoolId}`);
       }
     })
   );
 
   await Promise.all(
     [...classroomKeys].map((key) => {
-      const [classroomId, academicYearId] = key.split(":");
-      return recomputeClassroomRanks(classroomId, academicYearId);
+      const [classroomId, academicYearSchoolId] = key.split(":");
+      return recomputeClassroomRanks(classroomId, academicYearSchoolId);
     })
   );
 }

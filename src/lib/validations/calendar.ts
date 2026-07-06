@@ -5,7 +5,7 @@ import { z } from "zod";
 export const sessionTypeSchema = z.enum(SESSION_TYPE_CODES);
 
 const calendarDayFieldsSchema = z.object({
-  academicYearId: z.string().uuid(),
+  academicYearSchoolId: z.string().uuid(),
   date: z.string().min(1, "Date is required"),
   lessonPlanNumber: z.coerce.number().int().min(1).optional().nullable(),
   sessionType: sessionTypeSchema.default("INSTRUCTIONAL"),
@@ -28,7 +28,7 @@ export const calendarDaySchema = calendarDayFieldsSchema.superRefine(refineLesso
 export type CalendarDayInput = z.infer<typeof calendarDaySchema>;
 
 export const calendarDayUpdateSchema = calendarDayFieldsSchema
-  .omit({ academicYearId: true, date: true })
+  .omit({ academicYearSchoolId: true, date: true })
   .superRefine(refineLessonPlanNumber);
 
 export type CalendarDayUpdateInput = z.infer<typeof calendarDayUpdateSchema>;

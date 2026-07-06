@@ -6,31 +6,40 @@ function startOfDay(date: Date) {
   return d;
 }
 
-export async function findCurrentAcademicYearForSchool(
+export async function findCurrentAcademicYearSchoolForSchool(
   schoolId: string,
   referenceDate = new Date()
 ) {
   const today = startOfDay(referenceDate);
 
-  const byDateRange = await prisma.academicYear.findFirst({
+  const byDateRange = await prisma.academicYearSchool.findFirst({
     where: {
       schoolId,
       deletedAt: null,
-      startDate: { lte: today },
-      endDate: { gte: today },
+      academicYear: {
+        deletedAt: null,
+        startDate: { lte: today },
+        endDate: { gte: today },
+      },
     },
-    orderBy: { startDate: "desc" },
+    orderBy: { academicYear: { startDate: "desc" } },
+    include: { academicYear: true },
   });
   if (byDateRange) return byDateRange;
 
-  const byActive = await prisma.academicYear.findFirst({
+  const byActive = await prisma.academicYearSchool.findFirst({
     where: { schoolId, isActive: true, deletedAt: null },
-    orderBy: { startDate: "desc" },
+    orderBy: { academicYear: { startDate: "desc" } },
+    include: { academicYear: true },
   });
   if (byActive) return byActive;
 
-  return prisma.academicYear.findFirst({
+  return prisma.academicYearSchool.findFirst({
     where: { schoolId, deletedAt: null },
-    orderBy: { startDate: "desc" },
+    orderBy: { academicYear: { startDate: "desc" } },
+    include: { academicYear: true },
   });
 }
+
+/** @deprecated Use findCurrentAcademicYearSchoolForSchool */
+export const findCurrentAcademicYearForSchool = findCurrentAcademicYearSchoolForSchool;

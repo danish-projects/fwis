@@ -35,7 +35,7 @@ export default async function AcademicYearsPage({ searchParams }: PageProps) {
         <div>
           <h1 className="text-2xl font-bold md:text-3xl">Academic Years</h1>
           <p className="text-muted-foreground">
-            Manage school academic years — one active year per school
+            Manage global academic years and per-school settings
           </p>
         </div>
         {canCreate && (
@@ -71,7 +71,7 @@ export default async function AcademicYearsPage({ searchParams }: PageProps) {
               <thead>
                 <tr className="border-b text-left text-muted-foreground">
                   <th className="pb-3 pr-4 font-medium">Year</th>
-                  <th className="pb-3 pr-4 font-medium">School</th>
+                  <th className="pb-3 pr-4 font-medium">Schools</th>
                   <th className="pb-3 pr-4 font-medium">Dates</th>
                   <th className="pb-3 pr-4 font-medium">Calendar Days</th>
                   <th className="pb-3 pr-4 font-medium">Enrollments</th>
@@ -90,7 +90,13 @@ export default async function AcademicYearsPage({ searchParams }: PageProps) {
                         {year.name}
                       </Link>
                     </td>
-                    <td className="py-3 pr-4 text-muted-foreground">{year.school.name}</td>
+                    <td className="py-3 pr-4 text-muted-foreground">
+                      {year.linkedSchoolCount > 0
+                        ? year.activeSchoolNames.length > 0
+                          ? year.activeSchoolNames.join(", ")
+                          : `${year.linkedSchoolCount} linked`
+                        : "—"}
+                    </td>
                     <td className="py-3 pr-4 text-muted-foreground">
                       {formatDate(year.startDate)} – {formatDate(year.endDate)}
                     </td>

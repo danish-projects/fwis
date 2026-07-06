@@ -63,3 +63,23 @@ export async function getSelectedSchool(
   const cookieSchoolId = cookieStore.get(SCHOOL_COOKIE)?.value;
   return resolveSelectedSchool(user, cookieSchoolId);
 }
+
+/** School scope for list pages (teachers, grades, etc.) — honors URL override, then sidebar selection. */
+export async function resolveListSchoolId(
+  user: AuthUser,
+  explicitSchoolId?: string | null
+): Promise<string | null> {
+  if (explicitSchoolId) {
+    const allowed = await assertUserCanAccessSchool(user, explicitSchoolId);
+    if (allowed) return allowed.id;
+  }
+
+  const selected = await getSelectedSchool(user);
+  if (selected) return selected.id;
+
+  if (!user.roles.includes("SUPER_ADMIN") && user.schoolIds[0]) {
+    return user.schoolIds[0];
+  }
+
+  return null;
+}

@@ -1,40 +1,29 @@
 import { CalendarDays } from "lucide-react";
 import { fetchDashboardCalendarHighlights } from "@/lib/calendar/dashboard-calendar-highlights";
-import { resolveAcademicYearForSchool } from "@/lib/academic-year/resolve-year";
+import { resolveAcademicYearSchoolForSchool } from "@/lib/academic-year/resolve-year";
 import type { AcademicYearSummary } from "@/lib/academic-year/constants";
-import { prisma } from "@/lib/prisma";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatDate } from "@/lib/utils";
 
 type DashboardCalendarHighlightsProps = {
   schoolId?: string | null;
-  academicYearId?: string | null;
+  academicYearSchoolId?: string | null;
   selectedYear?: AcademicYearSummary | null;
   title?: string;
 };
 
-async function resolveAcademicYearId({
+async function resolveAcademicYearSchoolId({
   schoolId,
-  academicYearId,
+  academicYearSchoolId,
   selectedYear,
 }: DashboardCalendarHighlightsProps): Promise<string | null> {
-  if (academicYearId) return academicYearId;
+  if (academicYearSchoolId) return academicYearSchoolId;
 
   if (schoolId) {
-    const year = await resolveAcademicYearForSchool(schoolId, selectedYear ?? null);
-    return year?.id ?? null;
-  }
-
-  if (selectedYear) {
-    const year = await prisma.academicYear.findFirst({
-      where: {
-        name: selectedYear.name,
-        deletedAt: null,
-        school: { deletedAt: null, isActive: true },
-      },
-      orderBy: { school: { name: "asc" } },
-      select: { id: true },
-    });
+    const year = await resolveAcademicYearSchoolForSchool(
+      schoolId,
+      selectedYear ?? null
+    );
     return year?.id ?? null;
   }
 
@@ -43,16 +32,16 @@ async function resolveAcademicYearId({
 
 export async function DashboardCalendarHighlights({
   schoolId,
-  academicYearId,
+  academicYearSchoolId,
   selectedYear,
   title = "Academic Calendar",
 }: DashboardCalendarHighlightsProps) {
-  const resolvedYearId = await resolveAcademicYearId({
+  const resolvedYearSchoolId = await resolveAcademicYearSchoolId({
     schoolId,
-    academicYearId,
+    academicYearSchoolId,
     selectedYear,
   });
-  const highlights = await fetchDashboardCalendarHighlights(resolvedYearId);
+  const highlights = await fetchDashboardCalendarHighlights(resolvedYearSchoolId);
 
   if (!highlights) {
     return (

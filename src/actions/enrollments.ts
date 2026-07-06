@@ -23,9 +23,28 @@ import {
 } from "@/lib/validations/enrollment";
 import {
   getSelectedAcademicYear,
-  resolveAcademicYearForSchool,
+  resolveAcademicYearSchoolForSchool,
 } from "@/lib/academic-year/resolve-year";
+import { resolveListSchoolId } from "@/lib/school/resolve-school";
 import { ensureStudentNumber } from "@/lib/students/student-number";
+
+async function resolveAcademicYearSchoolId(
+  schoolId: string,
+  globalAcademicYearId: string
+) {
+  const link = await prisma.academicYearSchool.findFirst({
+    where: {
+      schoolId,
+      academicYearId: globalAcademicYearId,
+      deletedAt: null,
+    },
+    select: { id: true },
+  });
+  if (!link) {
+    throw new Error("Academic year is not linked to the selected school");
+  }
+  return link.id;
+}
 
 function parseEnrollmentData(data: EnrollmentInput) {
   const parsed = enrollmentSchema.parse(data);
@@ -42,7 +61,10 @@ function parseEnrollmentData(data: EnrollmentInput) {
   };
 }
 
-async function validateEnrollmentScope(user: AuthUser, data: ReturnType<typeof parseEnrollmentData>) {
+async function validateEnrollmentScope(
+  user: AuthUser,
+  data: ReturnType<typeof parseEnrollmentData>
+) {
   if (isClassroomScopedUser(user)) {
     if (!user.classroomIds.includes(data.classroomId)) {
       throw new Error("You can only enroll students in your assigned grades");
@@ -57,9 +79,11 @@ async function validateEnrollmentScope(user: AuthUser, data: ReturnType<typeof p
   if (!classroom) throw new Error("Classroom does not belong to selected school");
 
   const year = await prisma.academicYear.findFirst({
-    where: { id: data.academicYearId, schoolId: data.schoolId, deletedAt: null },
+    where: { id: data.academicYearId, deletedAt: null },
   });
-  if (!year) throw new Error("Academic year does not belong to selected school");
+  if (!year) throw new Error("Academic year not found");
+
+  await resolveAcademicYearSchoolId(data.schoolId, data.academicYearId);
 }
 
 export async function createEnrollment(data: EnrollmentInput) {
@@ -67,11 +91,15 @@ export async function createEnrollment(data: EnrollmentInput) {
   const enrollmentData = parseEnrollmentData(data);
   await validateEnrollmentScope(user, enrollmentData);
 
+  const academicYearSchoolId = await resolveAcademicYearSchoolId(
+    enrollmentData.schoolId,
+    enrollmentData.academicYearId
+  );
+
   const existing = await prisma.studentEnrollment.findFirst({
     where: {
       studentId: enrollmentData.studentId,
-      academicYearId: enrollmentData.academicYearId,
-      schoolId: enrollmentData.schoolId,
+      academicYearSchoolId,
       deletedAt: null,
     },
   });
@@ -81,7 +109,17 @@ export async function createEnrollment(data: EnrollmentInput) {
 
   const enrollment = await prisma.$transaction(async (tx) => {
     await ensureStudentNumber(tx, enrollmentData.studentId, enrollmentData.schoolId);
-    return tx.studentEnrollment.create({ data: enrollmentData });
+    return tx.studentEnrollment.create({
+      data: {
+        studentId: enrollmentData.studentId,
+        schoolId: enrollmentData.schoolId,
+        academicYearSchoolId,
+        classroomId: enrollmentData.classroomId,
+        teacherId: enrollmentData.teacherId,
+        enrollmentDate: enrollmentData.enrollmentDate,
+        status: enrollmentData.status,
+      },
+    });
   });
 
   await createAuditLog({
@@ -109,9 +147,22 @@ export async function updateEnrollment(id: string, data: EnrollmentInput) {
   const before = await prisma.studentEnrollment.findUnique({ where: { id } });
   if (!before || before.deletedAt) throw new Error("Enrollment not found");
 
+  const academicYearSchoolId = await resolveAcademicYearSchoolId(
+    enrollmentData.schoolId,
+    enrollmentData.academicYearId
+  );
+
   const enrollment = await prisma.studentEnrollment.update({
     where: { id },
-    data: enrollmentData,
+    data: {
+      studentId: enrollmentData.studentId,
+      schoolId: enrollmentData.schoolId,
+      academicYearSchoolId,
+      classroomId: enrollmentData.classroomId,
+      teacherId: enrollmentData.teacherId,
+      enrollmentDate: enrollmentData.enrollmentDate,
+      status: enrollmentData.status,
+    },
   });
 
   await createAuditLog({
@@ -140,10 +191,10 @@ export async function getEligibleStudentsForEnrollment(
     throw new Error("Unauthorized school access");
   }
 
-  const year = await prisma.academicYear.findFirst({
-    where: { id: academicYearId, schoolId, deletedAt: null },
-  });
-  if (!year) throw new Error("Academic year does not belong to selected school");
+  const academicYearSchoolId = await resolveAcademicYearSchoolId(
+    schoolId,
+    academicYearId
+  );
 
   const scopeFilter = buildEnrollmentEligibleStudentFilter(user, schoolId);
 
@@ -155,8 +206,7 @@ export async function getEligibleStudentsForEnrollment(
           NOT: {
             enrollments: {
               some: {
-                schoolId,
-                academicYearId,
+                academicYearSchoolId,
                 deletedAt: null,
               },
             },
@@ -227,31 +277,33 @@ export async function getEnrollments(rawParams: {
 }) {
   const user = await requirePermission("enrollments:read");
   const params = enrollmentListSchema.parse(rawParams);
+  const listSchoolId = await resolveListSchoolId(user, params.schoolId);
 
   const selectedYear = await getSelectedAcademicYear(user);
 
-  let resolvedYearId = params.academicYearId;
-  let yearNameFilter: string | undefined;
+  let resolvedYearSchoolId: string | undefined;
 
-  if (!resolvedYearId && selectedYear) {
-    if (user.roles.includes("SUPER_ADMIN")) {
-      yearNameFilter = selectedYear.name;
-    } else {
-      const schoolId = params.schoolId ?? user.schoolIds[0];
-      if (schoolId) {
-        const schoolYear = await resolveAcademicYearForSchool(
-          schoolId,
-          selectedYear
-        );
-        resolvedYearId = schoolYear?.id;
-      }
+  if (params.academicYearId && listSchoolId) {
+    try {
+      resolvedYearSchoolId = await resolveAcademicYearSchoolId(
+        listSchoolId,
+        params.academicYearId
+      );
+    } catch {
+      resolvedYearSchoolId = undefined;
     }
+  } else if (selectedYear && listSchoolId) {
+    const schoolYear = await resolveAcademicYearSchoolForSchool(
+      listSchoolId,
+      selectedYear
+    );
+    resolvedYearSchoolId = schoolYear?.id;
   }
 
   const where = buildEnrollmentListFilter(user, {
     ...params,
-    academicYearId: resolvedYearId,
-    academicYearName: yearNameFilter,
+    schoolId: listSchoolId ?? "00000000-0000-0000-0000-000000000000",
+    academicYearSchoolId: resolvedYearSchoolId,
   });
 
   const [data, total] = await Promise.all([
@@ -263,7 +315,7 @@ export async function getEnrollments(rawParams: {
       include: {
         student: true,
         school: true,
-        academicYear: true,
+        academicYearSchool: { include: { academicYear: true } },
         classroom: { include: { grade: true, section: true } },
         teacher: { select: { firstName: true, lastName: true } },
         finalGrade: true,
@@ -294,7 +346,7 @@ export async function getEnrollmentById(id: string) {
     include: {
       student: true,
       school: true,
-      academicYear: true,
+      academicYearSchool: { include: { academicYear: true } },
       classroom: { include: { grade: true, section: true } },
       teacher: true,
       finalGrade: true,
@@ -311,15 +363,22 @@ export async function getEnrollmentById(id: string) {
 
 export async function getEnrollmentFormOptions() {
   const user = await requirePermission("enrollments:read");
+  const listSchoolId = await resolveListSchoolId(user);
 
-  const schoolFilter =
-    user.roles.includes("SUPER_ADMIN")
-      ? { deletedAt: null, isActive: true }
+  const schoolFilter = listSchoolId
+    ? { id: listSchoolId, deletedAt: null, isActive: true }
+    : user.roles.includes("SUPER_ADMIN")
+      ? { id: "00000000-0000-0000-0000-000000000000", deletedAt: null }
       : { id: { in: user.schoolIds }, deletedAt: null, isActive: true };
 
-  const classroomFilter = buildClassroomListWhere(user);
+  const classroomFilter = buildClassroomListWhere(
+    user,
+    listSchoolId
+      ? { schoolId: listSchoolId }
+      : { schoolId: "00000000-0000-0000-0000-000000000000" }
+  );
 
-  const [schools, classrooms, years, teachers] = await Promise.all([
+  const [schools, classrooms, yearLinks, teachers] = await Promise.all([
     prisma.school.findMany({
       where: schoolFilter,
       orderBy: { name: "asc" },
@@ -330,15 +389,31 @@ export async function getEnrollmentFormOptions() {
       orderBy: { name: "asc" },
       include: { grade: true, section: true, school: { select: { name: true } } },
     }),
-    prisma.academicYear.findMany({
-      where: user.roles.includes("SUPER_ADMIN")
-        ? { deletedAt: null }
-        : { schoolId: { in: user.schoolIds }, deletedAt: null },
-      orderBy: { startDate: "desc" },
-      include: { school: { select: { id: true, name: true } } },
+    prisma.academicYearSchool.findMany({
+      where: listSchoolId
+        ? {
+            schoolId: listSchoolId,
+            deletedAt: null,
+            academicYear: { deletedAt: null },
+          }
+        : user.roles.includes("SUPER_ADMIN")
+          ? { id: "00000000-0000-0000-0000-000000000000" }
+          : {
+              schoolId: { in: user.schoolIds },
+              deletedAt: null,
+              academicYear: { deletedAt: null },
+            },
+      orderBy: { academicYear: { startDate: "desc" } },
+      include: {
+        academicYear: { select: { id: true, name: true } },
+        school: { select: { id: true, name: true } },
+      },
     }),
     prisma.teacher.findMany({
-      where: buildTeacherScopeWhere(user, { isActive: true }),
+      where: buildTeacherScopeWhere(user, {
+        isActive: true,
+        ...(listSchoolId ? { schoolId: listSchoolId } : {}),
+      }),
       orderBy: [{ lastName: "asc" }, { firstName: "asc" }],
       select: {
         id: true,
@@ -350,6 +425,20 @@ export async function getEnrollmentFormOptions() {
     }),
   ]);
 
+  const globalYears = new Map<
+    string,
+    { id: string; name: string; label: string }
+  >();
+  for (const link of yearLinks) {
+    if (!globalYears.has(link.academicYear.id)) {
+      globalYears.set(link.academicYear.id, {
+        id: link.academicYear.id,
+        name: link.academicYear.name,
+        label: link.academicYear.name,
+      });
+    }
+  }
+
   return {
     schools,
     classrooms: classrooms.map((c) => ({
@@ -358,13 +447,14 @@ export async function getEnrollmentFormOptions() {
       schoolId: c.schoolId,
       label: c.name,
     })),
-    academicYears: years.map((y) => ({
-      id: y.id,
-      name: y.name,
-      schoolId: y.schoolId,
-      label: `${y.name} — ${y.school.name}`,
-      isActive: y.isActive,
+    academicYears: yearLinks.map((link) => ({
+      id: link.academicYear.id,
+      name: link.academicYear.name,
+      schoolId: link.schoolId,
+      label: link.academicYear.name,
+      isActive: link.isActive,
     })),
+    globalAcademicYears: [...globalYears.values()],
     teachers: teachers.map((teacher) => ({
       id: teacher.id,
       firstName: teacher.firstName,
@@ -401,16 +491,16 @@ export async function getClassroomsForAssessment() {
   const schoolIds = [...new Set(classrooms.map((c) => c.schoolId))];
   const yearBySchool = new Map<string, string>();
   for (const schoolId of schoolIds) {
-    const year = await resolveAcademicYearForSchool(schoolId, selectedYear);
+    const year = await resolveAcademicYearSchoolForSchool(schoolId, selectedYear);
     if (year) yearBySchool.set(schoolId, year.id);
   }
 
-  const yearIds = [...new Set(yearBySchool.values())];
+  const yearSchoolIds = [...new Set(yearBySchool.values())];
   const counts = await prisma.studentEnrollment.groupBy({
     by: ["classroomId"],
     where: {
       classroomId: { in: classrooms.map((c) => c.id) },
-      academicYearId: { in: yearIds },
+      academicYearSchoolId: { in: yearSchoolIds },
       deletedAt: null,
       status: "ACTIVE",
     },

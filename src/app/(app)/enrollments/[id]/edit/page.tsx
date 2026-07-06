@@ -27,7 +27,7 @@ export default async function EditEnrollmentPage({ params }: PageProps) {
         studentLastName: enrollment.student.lastName,
         studentId: enrollment.studentId,
         schoolId: enrollment.schoolId,
-        academicYearId: enrollment.academicYearId,
+        academicYearId: enrollment.academicYearSchool.academicYear.id,
         classroomId: enrollment.classroomId,
         teacherId: enrollment.teacherId,
         enrollmentDate: enrollment.enrollmentDate.toISOString(),

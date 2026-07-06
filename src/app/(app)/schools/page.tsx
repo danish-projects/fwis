@@ -67,6 +67,7 @@ export default async function SchoolsPage({ searchParams }: PageProps) {
             <table className="w-full min-w-[640px] text-sm">
               <thead>
                 <tr className="border-b text-left text-muted-foreground">
+                  <th className="pb-3 pr-4 font-medium">Code</th>
                   <th className="pb-3 pr-4 font-medium">School</th>
                   <th className="pb-3 pr-4 font-medium">Location</th>
                   <th className="pb-3 pr-4 font-medium">Principal</th>
@@ -77,6 +78,7 @@ export default async function SchoolsPage({ searchParams }: PageProps) {
               <tbody>
                 {schools.map((school) => (
                   <tr key={school.id} className="border-b last:border-0">
+                    <td className="py-3 pr-4 font-mono text-xs">{school.code}</td>
                     <td className="py-3 pr-4">
                       <Link
                         href={`/schools/${school.id}`}
@@ -105,7 +107,7 @@ export default async function SchoolsPage({ searchParams }: PageProps) {
                 ))}
                 {schools.length === 0 && (
                   <tr>
-                    <td colSpan={5} className="py-8 text-center text-muted-foreground">
+                    <td colSpan={6} className="py-8 text-center text-muted-foreground">
                       No schools found.
                     </td>
                   </tr>
