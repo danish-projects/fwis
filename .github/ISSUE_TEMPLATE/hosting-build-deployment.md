@@ -10,37 +10,40 @@ assignees:
 
 We need a **hosting build package** created from the latest `dev` branch so the app can be deployed to shared Node.js hosting.
 
-The repo includes a build script that produces a standalone deploy folder — the generated `hosting-build/` output is **not** committed to git (it is gitignored).
+The repo includes a build script that produces a standalone deploy folder — generated `hosting-build-<env>/` output is **not** committed to git (it is gitignored).
 
 ## Task
 
 - [ ] Pull the latest `dev` branch
 - [ ] Install dependencies (if needed): `npm install`
-- [ ] Ensure `.env.local` is configured (required for Prisma generate during build)
+- [ ] Create `.env.stage` and/or `.env.prod` with target environment secrets (see `.env.example`)
 - [ ] Run the hosting build command (see below)
-- [ ] Upload `hosting-build/` or `hosting-build.zip` to the shared hosting server
+- [ ] Upload `hosting-build-<env>/` or `hosting-build-<env>.zip` to the shared hosting server
 
 ## Build command
 
 ```bash
-npm run build:hosting
+npm run build:hosting -- stage   # uses .env.stage → hosting-build-stage/
+npm run build:hosting -- prod    # uses .env.prod  → hosting-build-prod/
 ```
 
 This command:
 
-- Runs `prisma generate` and `next build` (standalone output)
-- Packages everything into **`hosting-build/`**
-- Creates **`hosting-build.zip`** for easy upload (Windows)
-- Includes `server.js`, static assets, Prisma schema/migrations, and deployment docs
+- Runs **L1 BDD tests** (`npm run test:l1`) — mock-data Vitest + TypeScript check
+- Runs `prisma generate` and `next build` (standalone output) using only the selected `.env.<env>` file
+- Packages everything into **`hosting-build-<env>/`**
+- Creates **`hosting-build-<env>.zip`** for easy upload (Windows)
+- Copies **`.env`** into the package from `.env.<env>` (no separate example file)
+- Includes `server.js`, static assets, Prisma schema/migrations, and `HOSTING.md`
 
 ## Output
 
 | Path | Description |
 |------|-------------|
-| `hosting-build/` | Full deploy folder (~111 MB) |
-| `hosting-build.zip` | Compressed archive for upload (~36 MB) |
-| `hosting-build/HOSTING.md` | Server setup instructions |
-| `hosting-build/.env.production.example` | Production env template |
+| `hosting-build-stage/` or `hosting-build-prod/` | Full deploy folder |
+| `hosting-build-<env>.zip` | Compressed archive for upload (Windows) |
+| `hosting-build-<env>/HOSTING.md` | Server setup instructions |
+| `hosting-build-<env>/.env` | Runtime secrets (from `.env.stage` or `.env.prod`) |
 
 ## Server requirements
 
@@ -51,14 +54,15 @@ This command:
 
 ## After upload
 
-1. Copy `.env.production.example` → `.env` on the server and fill in production values
+1. **`.env` is already in the package** — review on the server if needed; do not commit the build folder to git
 2. Run migrations from dev machine: `npx prisma migrate deploy`
 3. Start the app: `./start.sh` or set startup file to `server.js` in the host panel
 
-See `hosting-build/HOSTING.md` for full cPanel/shared hosting steps.
+See `hosting-build-<env>/HOSTING.md` for full cPanel/shared hosting steps.
 
 ## Notes
 
-- Do **not** commit `hosting-build/` or `hosting-build.zip` to git
-- Supabase credentials go in `.env` on the server — see `.env.example` for required variables
+- Do **not** commit `hosting-build-*` or `hosting-build-*.zip` to git
+- Do **not** commit `.env.stage` or `.env.prod` to git
+- To change `NEXT_PUBLIC_*` values, edit `.env.<env>` locally and rebuild
 - The hosting build sets `FWIS_HOSTING_BUILD=1` to package the standalone output for deployment

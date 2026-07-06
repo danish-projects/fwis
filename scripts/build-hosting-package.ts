@@ -112,7 +112,7 @@ function copyDir(from: string, to: string) {
   fs.cpSync(from, to, { recursive: true });
 }
 
-const HOSTING_ENV_ALLOWLIST = new Set([".env", ".env.production.example"]);
+const HOSTING_ENV_ALLOWLIST = new Set([".env"]);
 
 function isSensitiveEnvFile(name: string): boolean {
   if (name === ".env" || name.startsWith(".env.")) return true;
@@ -422,13 +422,6 @@ function main() {
 
   logRemovedEnvFiles(outputDir, stripEnvFilesFromDir(outputDir));
 
-  if (fs.existsSync(path.join(ROOT, ".env.example"))) {
-    fs.copyFileSync(
-      path.join(ROOT, ".env.example"),
-      path.join(outputDir, ".env.production.example")
-    );
-  }
-
   writeFile(
     outputDir,
     "start.sh",
@@ -508,10 +501,10 @@ node server.js
     outputDir,
     "web.config.env.example",
     `# SmarterASP.NET / IIS — copy values into web.config <environmentVariables>
-# or create a .env file next to server.js (SmarterASP Next.js guide supports .env).
+# or use the included .env file next to server.js (already populated at build time).
 #
-# IMPORTANT: NEXT_PUBLIC_* vars are baked in at build time. Set them in .env.local
-# BEFORE running npm run build:hosting (especially NEXT_PUBLIC_APP_URL).
+# IMPORTANT: NEXT_PUBLIC_* vars are baked in at build time from .env.<env> on your PC
+# (e.g. .env.stage, .env.prod) before running npm run build:hosting -- <env>.
 
 DATABASE_URL=postgresql://...pooler...
 DIRECT_URL=postgresql://...direct...
@@ -533,7 +526,8 @@ PII_ENCRYPTION_KEY=base64-32-byte-key
     "HOSTING.md",
     `# FWIS — Shared hosting deployment
 
-This folder is a **standalone Node.js build** of FWIS. Upload the entire \`${outputFolderName}\` directory to your server.
+This folder is a **standalone Node.js build** of FWIS for the **${envName}** environment.
+Upload the entire \`${outputFolderName}\` directory to your server.
 
 ## Requirements
 
@@ -545,7 +539,8 @@ This folder is a **standalone Node.js build** of FWIS. Upload the entire \`${out
 ## Quick start
 
 1. Upload all files in this folder to your hosting account (e.g. \`~/fwis/\`).
-2. Copy \`.env.production.example\` to \`.env\` and fill in production values.
+2. **\`.env\` is already included** — copied from \`.env.${envName}\` when you ran \`npm run build:hosting -- ${envName}\`.
+   Review secrets on the server if needed; do not commit this folder to git.
 3. On the server (SSH or host terminal), from this folder, start the app (step 4 below).
 
    Run database migrations from your dev machine before deploy:
@@ -568,7 +563,7 @@ This folder is a **standalone Node.js build** of FWIS. Upload the entire \`${out
 
 ## Environment variables
 
-See \`.env.production.example\`. Required in production:
+Runtime config lives in **\`.env\`** in this folder (no separate example file is shipped).
 
 | Variable | Purpose |
 |----------|---------|
@@ -577,10 +572,14 @@ See \`.env.production.example\`. Required in production:
 | \`NEXT_PUBLIC_SUPABASE_URL\` | Supabase project URL |
 | \`NEXT_PUBLIC_SUPABASE_ANON_KEY\` | Supabase anon key |
 | \`SUPABASE_SERVICE_ROLE_KEY\` | Server-side Supabase admin |
-| \`NEXT_PUBLIC_APP_URL\` | Public site URL (https://yourdomain.com) |
+| \`NEXT_PUBLIC_APP_URL\` | Public site URL (https://yourdomain.com) — **baked in at build time** |
 | \`PII_ENCRYPTION_KEY\` | 32-byte base64 key for student PII |
 
-Optional: \`PORT\` (default 3000), \`HOSTNAME\` (default 0.0.0.0), \`RESEND_API_KEY\`, \`EMAIL_FROM\`.
+Optional: \`PORT\` (default 3000), \`HOSTNAME\` (default 0.0.0.0), \`RESEND_API_KEY\`, \`EMAIL_FROM\`, Google Drive vars.
+
+To change \`NEXT_PUBLIC_*\` values, edit \`.env.${envName}\` locally and rebuild.
+
+See \`web.config.env.example\` for IIS variable names (Windows hosts).
 
 ## cPanel (Node.js Selector)
 
@@ -598,7 +597,7 @@ This build includes \`web.config\` for IIS **httpPlatformHandler** (required on 
 
 ### Before you build (on your PC)
 
-1. Create \`.env.stage\` and/or \`.env.prod\` with full credentials (see \`.env.example\`).
+1. Create \`.env.stage\` and/or \`.env.prod\` with full credentials (see \`.env.example\` in the repo).
 2. Set \`NEXT_PUBLIC_APP_URL=https://your-actual-domain.com\` in that file — embedded at build time.
 3. Run on **Windows** (SmarterASP runs Windows; avoids SWC/native module mismatches):
 
@@ -607,7 +606,7 @@ npm run build:hosting -- stage   # uses .env.stage → hosting-build-stage/
 npm run build:hosting -- prod    # uses .env.prod  → hosting-build-prod/
 \`\`\`
 
-The script exits without building if the name does not match an existing \`.env.<name>\` file.
+The script runs **L1 BDD tests** (mock data + typecheck) before building, then exits without building if the env name does not match an existing \`.env.<name>\` file.
 
 ### Upload via FTP
 
@@ -623,7 +622,7 @@ The script exits without building if the name does not match an existing \`.env.
 2. Confirm \`web.config\` points to \`server.js\` (already configured in this package).
 3. Add production environment variables:
    - Edit \`web.config\` \`<environmentVariables>\` (see comments in file), **or**
-   - Place a \`.env\` file beside \`server.js\` (see \`web.config.env.example\`).
+   - Use the included \`.env\` file beside \`server.js\` (see \`web.config.env.example\` for variable names).
 
 ### Database (Supabase — not on SmarterASP)
 
@@ -667,8 +666,8 @@ KB: [Next.js on SmarterASP](https://www.smarterasp.net/support/kb/a2233/how-to-p
 | \`prisma/\` | Schema and migrations |
 | \`src/generated/prisma/\` | Prisma client (if present) |
 | \`node_modules/\` | Minimal runtime dependencies |
-| \`web.config.env.example\` | Env var template for IIS / .env |
-| \`.env\` | Runtime secrets for this environment only (from \`.env.${envName}\`) |
+| \`web.config.env.example\` | IIS env var reference (optional; \`.env\` is already included) |
+| \`.env\` | Runtime secrets for **${envName}** (from \`.env.${envName}\` at build time) |
 
 Built: ${new Date().toISOString()} (env: ${envName})
 `
@@ -705,7 +704,7 @@ Built: ${new Date().toISOString()} (env: ${envName})
   console.log(`  Environment: ${envName} (from ${path.basename(envFilePath)})`);
   console.log(`  Approx. size: ${sizeMb} MB`);
   console.log("\nNext steps:");
-  console.log(`  1. Upload ${outputFolderName}/ to your server (includes .env)`);
+  console.log(`  1. Upload ${outputFolderName}/ to your server (includes .env from .env.${envName})`);
   console.log("  2. Run ./start.sh or point Node app to server.js");
   console.log("  3. See HOSTING.md for cPanel / shared hosting details");
 
