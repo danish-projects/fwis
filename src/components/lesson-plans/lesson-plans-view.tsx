@@ -164,14 +164,14 @@ export function LessonPlansView({ data, pagePath }: LessonPlansViewProps) {
           variant="secondary"
           disabled={isPending || !filterChanged}
         >
-          {isPending ? (
-            <>
-              <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
-              Applying...
-            </>
-          ) : (
-            "Apply"
-          )}
+            {isPending ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+                Filtering...
+              </>
+            ) : (
+              "Filter"
+            )}
         </Button>
       </form>
 

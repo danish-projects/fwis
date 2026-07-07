@@ -8,8 +8,10 @@ import { getSessionUser, requirePermission } from "@/lib/auth/session";
 import { hasPermission } from "@/lib/auth/permissions";
 import { CalendarBulkGenerate } from "@/components/calendar/calendar-bulk-generate";
 import { CalendarDaysTable } from "@/components/calendar/calendar-days-table";
+import { CalendarSessionSummary } from "@/components/calendar/calendar-session-summary";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { buildSessionTypeCounts, countAttendanceNeededDays } from "@/lib/calendar/session-type-counts";
 
 export const metadata = { title: "Academic Calendar" };
 
@@ -54,6 +56,8 @@ export default async function CalendarPage() {
     sessionType: day.sessionType,
     attendanceCount: day._count.attendance,
   }));
+  const sessionTypeCounts = buildSessionTypeCounts(yearData.calendarDays);
+  const attendanceNeededCount = countAttendanceNeededDays(yearData.calendarDays);
 
   return (
     <div className="space-y-6">
@@ -78,6 +82,14 @@ export default async function CalendarPage() {
           </Button>
         </div>
       </div>
+
+      <CalendarSessionSummary
+        schoolName={yearData.school.name}
+        academicYearName={yearData.name}
+        counts={sessionTypeCounts}
+        totalDays={days.length}
+        attendanceNeededCount={attendanceNeededCount}
+      />
 
       <CalendarDaysTable days={days} canUpdate={!!canUpdate} />
     </div>

@@ -9,6 +9,7 @@ import {
   assertStudentAccess,
   buildStudentEnrollmentVisibilityFilter,
   buildStudentListFilter,
+  mergeStudentQueryFilters,
 } from "@/lib/auth/student-access";
 import {
   studentSchema,
@@ -18,6 +19,7 @@ import {
 } from "@/lib/validations/student";
 import { getSelectedAcademicYear, resolveAcademicYearForSchool } from "@/lib/academic-year/resolve-year";
 import { isClassroomScopedUser } from "@/lib/auth/section-scope";
+import { resolveListSchoolId } from "@/lib/school/resolve-school";
 import {
   decryptStudentPii,
   decryptStudentPiiList,
@@ -27,37 +29,38 @@ import {
 
 async function buildEnrollmentYearFilter(user: AuthUser) {
   const selectedYear = await getSelectedAcademicYear(user);
-  if (!selectedYear) {
-    return { deletedAt: null, status: "ACTIVE" as const };
-  }
+  const listSchoolId = await resolveListSchoolId(user);
 
-  if (user.roles.includes("SUPER_ADMIN")) {
-    return {
-      deletedAt: null,
-      status: "ACTIVE" as const,
-      academicYearSchool: {
-        academicYear: { name: selectedYear.name, deletedAt: null },
-        deletedAt: null,
-      },
-    };
-  }
-
-  const schoolId = user.schoolIds[0];
-  if (!schoolId) {
-    return { deletedAt: null, status: "ACTIVE" as const };
-  }
-
-  const schoolYear = await resolveAcademicYearForSchool(schoolId, selectedYear);
   const classroomScope =
     isClassroomScopedUser(user) && user.classroomIds.length > 0
       ? { classroomId: { in: user.classroomIds } }
       : {};
 
-  return {
+  const base: Prisma.StudentEnrollmentWhereInput = {
     deletedAt: null,
     status: "ACTIVE" as const,
-    ...(schoolYear ? { academicYearSchoolId: schoolYear.id } : {}),
     ...classroomScope,
+  };
+
+  if (!listSchoolId) {
+    return base;
+  }
+
+  if (selectedYear) {
+    const schoolYear = await resolveAcademicYearForSchool(
+      listSchoolId,
+      selectedYear
+    );
+    return {
+      ...base,
+      schoolId: listSchoolId,
+      ...(schoolYear ? { academicYearSchoolId: schoolYear.id } : {}),
+    };
+  }
+
+  return {
+    ...base,
+    schoolId: listSchoolId,
   };
 }
 
@@ -253,26 +256,28 @@ export async function getStudents(rawParams: {
 }) {
   const user = await requirePermission("students:read");
   const params = studentListSchema.parse(rawParams);
+  const listSchoolId = await resolveListSchoolId(user);
   const enrollmentWhere = await buildEnrollmentYearFilter(user);
 
   const where = buildStudentListFilter(user, {
     search: params.search?.trim(),
     gender: params.gender,
     isActive: params.isActive,
+    listSchoolId,
   });
 
   const orderBy = { [params.sort]: params.order } as Prisma.StudentOrderByWithRelationInput;
   const enrollmentVisibility = buildStudentEnrollmentVisibilityFilter(
     user,
-    enrollmentWhere
+    enrollmentWhere,
+    listSchoolId
   );
+
+  const studentWhere = mergeStudentQueryFilters(where, enrollmentVisibility);
 
   const [data, total] = await Promise.all([
     prisma.student.findMany({
-      where: {
-        ...where,
-        ...enrollmentVisibility,
-      },
+      where: studentWhere,
       orderBy,
       skip: (params.page - 1) * params.pageSize,
       take: params.pageSize,
@@ -291,10 +296,7 @@ export async function getStudents(rawParams: {
       },
     }),
     prisma.student.count({
-      where: {
-        ...where,
-        ...enrollmentVisibility,
-      },
+      where: studentWhere,
     }),
   ]);
 
@@ -339,22 +341,22 @@ export async function exportStudentsCsv(rawParams: {
 }) {
   const user = await requirePermission("reports:export");
   const params = studentExportSchema.parse(rawParams);
+  const listSchoolId = await resolveListSchoolId(user);
   const enrollmentWhere = await buildEnrollmentYearFilter(user);
   const where = buildStudentListFilter(user, {
     search: params.search?.trim(),
     gender: params.gender,
     isActive: params.isActive,
+    listSchoolId,
   });
   const enrollmentVisibility = buildStudentEnrollmentVisibilityFilter(
     user,
-    enrollmentWhere
+    enrollmentWhere,
+    listSchoolId
   );
 
   const students = await prisma.student.findMany({
-    where: {
-      ...where,
-      ...enrollmentVisibility,
-    },
+    where: mergeStudentQueryFilters(where, enrollmentVisibility),
     orderBy: { lastName: "asc" },
     include: {
       enrollments: {

@@ -17,11 +17,14 @@ export function emptyToUndefined<T extends z.ZodType>(schema: T) {
 }
 
 /** Accepts boolean (server actions) or "true"/"false" strings (URL params). */
-export const optionalBooleanQuery = z
-  .union([z.boolean(), z.enum(["true", "false"])])
-  .optional()
-  .transform((v) => {
-    if (v === undefined) return undefined;
-    if (typeof v === "boolean") return v;
-    return v === "true";
-  });
+export const optionalBooleanQuery = z.preprocess(
+  (val) => (val === "" || val === null || val === undefined ? undefined : val),
+  z
+    .union([z.boolean(), z.enum(["true", "false"])])
+    .optional()
+    .transform((v) => {
+      if (v === undefined) return undefined;
+      if (typeof v === "boolean") return v;
+      return v === "true";
+    })
+);

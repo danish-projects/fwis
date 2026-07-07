@@ -113,7 +113,7 @@ export default async function TeachersPage({ searchParams }: PageProps) {
               <option value="false">Inactive</option>
             </select>
             <Button type="submit" variant="secondary">
-              Apply
+              Filter
             </Button>
           </form>
         </CardHeader>

@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { GENDER_CODES } from "@/lib/setup-types";
+import { emptyToUndefined, optionalBooleanQuery } from "@/lib/validations/pagination";
 
 export const studentSchema = z.object({
   firstName: z.string().min(1, "First name is required"),
@@ -20,12 +21,9 @@ export type StudentInput = z.infer<typeof studentSchema>;
 export const studentListSchema = z.object({
   page: z.coerce.number().int().min(1).default(1),
   pageSize: z.coerce.number().int().min(1).max(100).default(20),
-  search: z.string().optional(),
-  gender: z.enum(GENDER_CODES).optional(),
-  isActive: z
-    .enum(["true", "false"])
-    .optional()
-    .transform((v) => (v === undefined ? undefined : v === "true")),
+  search: emptyToUndefined(z.string().optional()),
+  gender: emptyToUndefined(z.enum(GENDER_CODES).optional()),
+  isActive: optionalBooleanQuery,
   sort: z.enum(["lastName", "firstName", "enrollmentDate"]).default("lastName"),
   order: z.enum(["asc", "desc"]).default("asc"),
 });

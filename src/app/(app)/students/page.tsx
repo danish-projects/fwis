@@ -3,6 +3,7 @@ import { Download, Plus, Search } from "lucide-react";
 import { getStudents } from "@/actions/students";
 import { getSessionUser, requirePermission } from "@/lib/auth/session";
 import { hasPermission } from "@/lib/auth/permissions";
+import { getSelectedSchool } from "@/lib/school/resolve-school";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
@@ -40,10 +41,10 @@ export default async function StudentsPage({ searchParams }: PageProps) {
   const user = await getSessionUser();
   const canCreate = user && hasPermission(user.roles, "students:create");
   const canExport = user && hasPermission(user.roles, "reports:export");
+  const selectedSchool = user ? await getSelectedSchool(user) : null;
 
   const params = await searchParams;
   const page = Number(params.page) || 1;
-  const search = params.search;
   const gender = params.gender as "MALE" | "FEMALE" | undefined;
   const isActive =
     params.isActive === "true"
@@ -56,7 +57,7 @@ export default async function StudentsPage({ searchParams }: PageProps) {
 
   const { data: students, meta } = await getStudents({
     page,
-    search,
+    search: params.search,
     gender,
     isActive,
     sort,
@@ -64,8 +65,8 @@ export default async function StudentsPage({ searchParams }: PageProps) {
   });
 
   const queryBase = {
-    search,
-    gender,
+    search: params.search,
+    gender: params.gender,
     isActive: params.isActive,
     sort,
     order,
@@ -78,6 +79,7 @@ export default async function StudentsPage({ searchParams }: PageProps) {
           <h1 className="text-2xl font-bold tracking-tight md:text-3xl">Students</h1>
           <p className="text-muted-foreground">
             Global student master data — students are never duplicated
+            {selectedSchool ? ` · ${selectedSchool.name}` : ""}
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -110,14 +112,14 @@ export default async function StudentsPage({ searchParams }: PageProps) {
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <Input
                 name="search"
-                placeholder="Search name, parent, phone..."
-                defaultValue={search}
+                placeholder="Search name or student ID..."
+                defaultValue={params.search}
                 className="pl-9"
               />
             </div>
             <select
               name="gender"
-              defaultValue={gender ?? ""}
+              defaultValue={params.gender ?? ""}
               className="h-10 rounded-md border border-input bg-background px-3 text-sm"
             >
               <option value="">All genders</option>
@@ -143,7 +145,7 @@ export default async function StudentsPage({ searchParams }: PageProps) {
               <option value="enrollmentDate">Sort: Enrollment Date</option>
             </select>
             <Button type="submit" variant="secondary">
-              Apply
+              Filter
             </Button>
           </form>
         </CardHeader>

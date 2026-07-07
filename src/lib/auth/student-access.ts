@@ -78,24 +78,90 @@ export function buildEnrollmentEligibleStudentFilter(
 /** Limits list/export queries to enrolled students in scope, plus unenrolled records for admins. */
 export function buildStudentEnrollmentVisibilityFilter(
   user: AuthUser,
-  enrollmentWhere: Prisma.StudentEnrollmentWhereInput
+  enrollmentWhere: Prisma.StudentEnrollmentWhereInput,
+  listSchoolId?: string | null
 ): Prisma.StudentWhereInput {
   if (user.roles.includes("SUPER_ADMIN")) {
+    if (listSchoolId) {
+      return {
+        OR: [
+          { enrollments: { some: enrollmentWhere } },
+          unenrolledAtSchoolWhere(listSchoolId),
+        ],
+      };
+    }
+
     return {
       OR: [{ enrollments: { some: enrollmentWhere } }, unenrolledStudentWhere()],
     };
   }
 
   if (canManageStudentRecords(user) && user.schoolIds.length > 0) {
+    const schoolIds = listSchoolId ? [listSchoolId] : user.schoolIds;
     return {
       OR: [
         { enrollments: { some: enrollmentWhere } },
-        unenrolledAtUserSchoolsWhere(user.schoolIds),
+        unenrolledAtUserSchoolsWhere(schoolIds),
       ],
     };
   }
 
   return { enrollments: { some: enrollmentWhere } };
+}
+
+/** Merge list filters with enrollment visibility (avoids clobbering nested OR clauses). */
+export function mergeStudentQueryFilters(
+  listFilter: Prisma.StudentWhereInput,
+  visibilityFilter: Prisma.StudentWhereInput
+): Prisma.StudentWhereInput {
+  return combineStudentWhere(listFilter, visibilityFilter);
+}
+
+function studentSearchWhere(search?: string): Prisma.StudentWhereInput | null {
+  const term = search?.trim();
+  if (!term) return null;
+
+  const contains = (value: string) =>
+    ({ contains: value, mode: "insensitive" as const });
+
+  const tokens = term.split(/\s+/).filter(Boolean);
+  if (tokens.length >= 2) {
+    const [first, ...rest] = tokens;
+    const last = rest.join(" ");
+    return {
+      OR: [
+        {
+          AND: [
+            { firstName: contains(first) },
+            { lastName: contains(last) },
+          ],
+        },
+        { firstName: contains(term) },
+        { lastName: contains(term) },
+        { studentNumber: contains(term) },
+      ],
+    };
+  }
+
+  return {
+    OR: [
+      { firstName: contains(term) },
+      { lastName: contains(term) },
+      { studentNumber: contains(term) },
+    ],
+  };
+}
+
+function combineStudentWhere(
+  ...parts: Array<Prisma.StudentWhereInput | null | undefined>
+): Prisma.StudentWhereInput {
+  const clauses = parts.filter(
+    (part): part is Prisma.StudentWhereInput =>
+      part != null && Object.keys(part).length > 0
+  );
+  if (clauses.length === 0) return {};
+  if (clauses.length === 1) return clauses[0];
+  return { AND: clauses };
 }
 
 export function buildStudentListFilter(
@@ -104,6 +170,7 @@ export function buildStudentListFilter(
     search?: string;
     gender?: "MALE" | "FEMALE";
     isActive?: boolean;
+    listSchoolId?: string | null;
   }
 ): Prisma.StudentWhereInput {
   const base: Prisma.StudentWhereInput = {
@@ -111,76 +178,87 @@ export function buildStudentListFilter(
     ...studentGenderFilter(user),
     ...(options?.gender ? { gender: options.gender } : {}),
     ...(options?.isActive !== undefined ? { isActive: options.isActive } : {}),
-    ...(options?.search
-      ? {
-          OR: [
-            { firstName: { contains: options.search, mode: "insensitive" } },
-            { lastName: { contains: options.search, mode: "insensitive" } },
-            { studentNumber: { contains: options.search, mode: "insensitive" } },
-          ],
-        }
-      : {}),
   };
 
+  const searchWhere = studentSearchWhere(options?.search);
+
   if (user.roles.includes("SUPER_ADMIN")) {
-    return base;
+    if (options?.listSchoolId) {
+      return combineStudentWhere(base, searchWhere, {
+        OR: [
+          {
+            enrollments: {
+              some: {
+                deletedAt: null,
+                schoolId: options.listSchoolId,
+              },
+            },
+          },
+          unenrolledAtSchoolWhere(options.listSchoolId),
+        ],
+      });
+    }
+
+    return combineStudentWhere(base, searchWhere);
   }
 
   const primaryRole = getPrimaryRole(user.roles);
+  const schoolIds = options?.listSchoolId
+    ? [options.listSchoolId]
+    : user.schoolIds;
 
-  if (primaryRole === "SCHOOL_ADMIN" && user.schoolIds.length > 0) {
+  if (primaryRole === "SCHOOL_ADMIN" && schoolIds.length > 0) {
     if (isSectionScopedAdmin(user) && user.classroomIds.length > 0) {
-      return {
-        ...base,
+      return combineStudentWhere(base, searchWhere, {
         enrollments: {
           some: {
             deletedAt: null,
             classroomId: { in: user.classroomIds },
           },
         },
-      };
+      });
     }
 
-    const schoolEnrollment: Prisma.StudentWhereInput = {
-      enrollments: {
-        some: {
-          deletedAt: null,
-          schoolId: { in: user.schoolIds },
+    return combineStudentWhere(base, searchWhere, {
+      OR: [
+        {
+          enrollments: {
+            some: {
+              deletedAt: null,
+              schoolId: { in: schoolIds },
+            },
+          },
         },
-      },
-    };
-
-    return {
-      ...base,
-      OR: [schoolEnrollment, unenrolledAtUserSchoolsWhere(user.schoolIds)],
-    };
+        unenrolledAtUserSchoolsWhere(schoolIds),
+      ],
+    });
   }
 
   if (primaryRole === "TEACHER" && user.classroomIds.length > 0) {
-    return {
-      ...base,
+    return combineStudentWhere(base, searchWhere, {
       enrollments: {
         some: {
           deletedAt: null,
           classroomId: { in: user.classroomIds },
         },
       },
-    };
+    });
   }
 
-  if (user.schoolIds.length > 0) {
-    return {
-      ...base,
+  if (schoolIds.length > 0) {
+    return combineStudentWhere(base, searchWhere, {
       enrollments: {
         some: {
           deletedAt: null,
-          schoolId: { in: user.schoolIds },
+          schoolId: { in: schoolIds },
         },
       },
-    };
+    });
   }
 
-  return { id: "00000000-0000-0000-0000-000000000000" };
+  return combineStudentWhere(base, searchWhere, {
+    id: "00000000-0000-0000-0000-000000000000",
+  });
 }
 
 export async function assertStudentAccess(

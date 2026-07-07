@@ -5,6 +5,7 @@ import {
   academicYearUpdateSchema,
 } from "@/lib/validations/academic-year";
 import { isAttendanceNeeded } from "@/lib/grades/attendance-percentage";
+import { buildSessionTypeCounts, countAttendanceNeededDays, pickSessionTypeCounts } from "@/lib/calendar/session-type-counts";
 import { sectionNameForGender } from "@/lib/teachers/gender-section";
 import { buildClassroomListWhere } from "@/lib/auth/section-scope";
 import { IDS, mockUser } from "../mocks/fixtures";
@@ -56,5 +57,34 @@ describe("Feature: School setup", () => {
       schoolId: IDS.schoolHou,
     });
     expect(where).toMatchObject({ schoolId: IDS.schoolHou, deletedAt: null });
+  });
+
+  it("Scenario: Calendar session type counts summarize school year days", () => {
+    const counts = buildSessionTypeCounts([
+      { sessionType: "INSTRUCTIONAL" },
+      { sessionType: "INSTRUCTIONAL" },
+      { sessionType: "QUIZ_1" },
+      { sessionType: "HOLIDAY" },
+    ]);
+    expect(counts.find((item) => item.sessionType === "INSTRUCTIONAL")?.count).toBe(
+      2
+    );
+    expect(counts.find((item) => item.sessionType === "QUIZ_1")?.count).toBe(1);
+    expect(counts.find((item) => item.sessionType === "HOLIDAY")?.count).toBe(1);
+    expect(counts.find((item) => item.sessionType === "FINAL_EXAM")?.count).toBe(0);
+
+    const picked = pickSessionTypeCounts(counts, ["INSTRUCTIONAL", "QUIZ_1"]);
+    expect(picked).toHaveLength(2);
+    expect(picked[0]?.count).toBe(2);
+    expect(picked[1]?.count).toBe(1);
+
+    expect(
+      countAttendanceNeededDays([
+        { sessionType: "INSTRUCTIONAL" },
+        { sessionType: "QUIZ_1" },
+        { sessionType: "HOLIDAY" },
+        { sessionType: "PARENT_MEETING" },
+      ])
+    ).toBe(2);
   });
 });
