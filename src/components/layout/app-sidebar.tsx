@@ -41,6 +41,10 @@ import {
 } from "@/lib/auth/permissions";
 import type { AcademicYearSummary } from "@/lib/academic-year/constants";
 import type { SchoolSummary } from "@/lib/school/constants";
+import {
+  APP_PRODUCT_NAME,
+  formatAppVersionLine,
+} from "@/lib/app-meta";
 
 const ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
   LayoutDashboard,
@@ -202,8 +206,10 @@ export function AppSidebar({
             F
           </div>
           <div>
-            <p className="font-semibold leading-tight">FWIS</p>
-            <p className="text-xs text-muted-foreground">Weekend Islamic School</p>
+            <p className="font-semibold leading-tight">{APP_PRODUCT_NAME}</p>
+            <p className="text-xs text-muted-foreground">
+              {formatAppVersionLine()}
+            </p>
           </div>
         </Link>
       </div>
@@ -290,7 +296,12 @@ export function AppSidebar({
         <Button variant="outline" size="icon" onClick={() => setOpen(true)}>
           <Menu className="h-5 w-5" />
         </Button>
-        <span className="font-semibold">FWIS</span>
+        <div className="min-w-0">
+          <p className="truncate font-semibold leading-tight">{APP_PRODUCT_NAME}</p>
+          <p className="truncate text-xs text-muted-foreground">
+            {formatAppVersionLine()}
+          </p>
+        </div>
       </div>
 
       {open && (

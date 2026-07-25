@@ -34,8 +34,8 @@ const landingBody = Source_Sans_3({
 
 export const metadata: Metadata = {
   title: {
-    default: "FWIS | Faizan Weekend Islamic School",
-    template: "%s | FWIS",
+    default: "FWIS Portal",
+    template: "%s | FWIS Portal",
   },
   description:
     "Faizan Weekend Islamic School — free weekend Islamic education from Dawat-e-Islami USA, with a secure staff portal for attendance, academics, and campus management.",
