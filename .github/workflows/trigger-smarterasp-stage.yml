@@ -18,6 +18,7 @@ jobs:
             echo "Missing secret SMARTERASP_DEPLOY_HOOK_URL"
             exit 1
           fi
-          curl -fsS -X POST "$HOOK_URL"
+          # 411 Length Required if POST has no Content-Length — send empty body
+          curl -fsS -X POST -H "Content-Length: 0" "$HOOK_URL"
           echo
           echo "Deploy hook called successfully."
