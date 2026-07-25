@@ -37,11 +37,21 @@ export type StudentProfileData = {
     studentNumber: string | null;
     dateOfBirth: Date | null;
     enrollmentDate: Date;
-    parentName: string | null;
-    parentPhone: string | null;
-    parentEmail: string | null;
-    address: string | null;
+    emailAddress: string | null;
     emergencyContact: string | null;
+    streetAddress: string | null;
+    city: string | null;
+    stateProvince: string | null;
+    zipPostalCode: string | null;
+    country: string | null;
+    fatherGuardianFirstName: string | null;
+    fatherGuardianLastName: string | null;
+    fatherParentalResponsibility: boolean | null;
+    fatherMobileWhatsappNumber: string | null;
+    motherGuardianFirstName: string | null;
+    motherGuardianLastName: string | null;
+    motherParentalResponsibility: boolean | null;
+    motherMobileWhatsappNumber: string | null;
     isActive: boolean;
   };
   yearOptions: StudentProfileYearOption[];
@@ -52,7 +62,7 @@ export type StudentProfileData = {
     enrollmentDate: Date;
     schoolName: string;
     gradeName: string;
-    teacherName: string | null;
+    staffName: string | null;
     academicYearName: string;
   } | null;
   attendance: {
@@ -91,6 +101,58 @@ export type StudentProfileData = {
   health: StudentProfileHealth;
 };
 
+function mapStudentProfileFields(student: {
+  id: string;
+  firstName: string;
+  lastName: string;
+  gender: string;
+  studentNumber: string | null;
+  dateOfBirth: Date | null;
+  enrollmentDate: Date;
+  emailAddress?: string | null;
+  emergencyContact: string | null;
+  streetAddress?: string | null;
+  city?: string | null;
+  stateProvince?: string | null;
+  zipPostalCode?: string | null;
+  country?: string | null;
+  fatherGuardianFirstName?: string | null;
+  fatherGuardianLastName?: string | null;
+  fatherParentalResponsibility?: boolean | null;
+  fatherMobileWhatsappNumber?: string | null;
+  motherGuardianFirstName?: string | null;
+  motherGuardianLastName?: string | null;
+  motherParentalResponsibility?: boolean | null;
+  motherMobileWhatsappNumber?: string | null;
+  isActive: boolean;
+}): StudentProfileData["student"] {
+  return {
+    id: student.id,
+    firstName: student.firstName,
+    lastName: student.lastName,
+    gender: student.gender,
+    studentNumber: student.studentNumber,
+    dateOfBirth: student.dateOfBirth,
+    enrollmentDate: student.enrollmentDate,
+    emailAddress: student.emailAddress ?? null,
+    emergencyContact: student.emergencyContact,
+    streetAddress: student.streetAddress ?? null,
+    city: student.city ?? null,
+    stateProvince: student.stateProvince ?? null,
+    zipPostalCode: student.zipPostalCode ?? null,
+    country: student.country ?? null,
+    fatherGuardianFirstName: student.fatherGuardianFirstName ?? null,
+    fatherGuardianLastName: student.fatherGuardianLastName ?? null,
+    fatherParentalResponsibility: student.fatherParentalResponsibility ?? null,
+    fatherMobileWhatsappNumber: student.fatherMobileWhatsappNumber ?? null,
+    motherGuardianFirstName: student.motherGuardianFirstName ?? null,
+    motherGuardianLastName: student.motherGuardianLastName ?? null,
+    motherParentalResponsibility: student.motherParentalResponsibility ?? null,
+    motherMobileWhatsappNumber: student.motherMobileWhatsappNumber ?? null,
+    isActive: student.isActive,
+  };
+}
+
 async function pickEnrollment(
   user: AuthUser,
   studentId: string,
@@ -107,7 +169,7 @@ async function pickEnrollment(
       school: { select: { name: true } },
       academicYearSchool: { include: { academicYear: { select: { id: true, name: true } } } },
       classroom: { select: { name: true, grade: { select: { name: true } } } },
-      teacher: { select: { firstName: true, lastName: true } },
+      staff: { select: { firstName: true, lastName: true } },
       attendance: {
         where: { deletedAt: null },
         select: {
@@ -200,21 +262,7 @@ export async function getStudentProfile(
 
   if (!enrollment) {
     return {
-      student: {
-        id: student.id,
-        firstName: student.firstName,
-        lastName: student.lastName,
-        gender: student.gender,
-        studentNumber: student.studentNumber,
-        dateOfBirth: student.dateOfBirth,
-        enrollmentDate: student.enrollmentDate,
-        parentName: student.parentName,
-        parentPhone: student.parentPhone,
-        parentEmail: student.parentEmail,
-        address: student.address,
-        emergencyContact: student.emergencyContact,
-        isActive: student.isActive,
-      },
+      student: mapStudentProfileFields(student),
       yearOptions,
       selectedYearId: requestedYearId ?? null,
       enrollment: null,
@@ -343,21 +391,7 @@ export async function getStudentProfile(
   ];
 
   return {
-    student: {
-      id: student.id,
-      firstName: student.firstName,
-      lastName: student.lastName,
-      gender: student.gender,
-      studentNumber: student.studentNumber,
-      dateOfBirth: student.dateOfBirth,
-      enrollmentDate: student.enrollmentDate,
-      parentName: student.parentName,
-      parentPhone: student.parentPhone,
-      parentEmail: student.parentEmail,
-      address: student.address,
-      emergencyContact: student.emergencyContact,
-      isActive: student.isActive,
-    },
+    student: mapStudentProfileFields(student),
     yearOptions,
     selectedYearId: enrollment.academicYearSchool.academicYear.id,
     enrollment: {
@@ -366,8 +400,8 @@ export async function getStudentProfile(
       enrollmentDate: enrollment.enrollmentDate,
       schoolName: enrollment.school.name,
       gradeName: enrollment.classroom.name,
-      teacherName: enrollment.teacher
-        ? `${enrollment.teacher.firstName} ${enrollment.teacher.lastName}`
+      staffName: enrollment.staff
+        ? `${enrollment.staff.firstName} ${enrollment.staff.lastName}`
         : null,
       academicYearName: enrollment.academicYearSchool.academicYear.name,
     },

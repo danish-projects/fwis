@@ -5,6 +5,7 @@ import {
 } from "@/lib/calendar/calendar-date";
 import { SESSION_TYPE_LABELS } from "@/lib/calendar/generate-sundays";
 import { formatLessonPlanLabel } from "@/lib/calendar/lesson-plan";
+import { selectDefaultCalendarDay } from "@/lib/calendar/select-default-day";
 import { isAttendanceNeeded } from "@/lib/grades/attendance-percentage";
 import {
   QUIZ_SESSION_TYPE_CODES,
@@ -36,14 +37,16 @@ type CalendarDayRow = {
 
 function sessionLabel(sessionType: string): string {
   return (
-    SESSION_TYPE_LABELS[sessionType as SessionTypeCode] ?? sessionType.replace(/_/g, " ")
+    SESSION_TYPE_LABELS[sessionType as SessionTypeCode] ??
+    sessionType.replace(/_/g, " ")
   );
 }
 
 export function buildDashboardCalendarHighlights(
-  calendarDays: CalendarDayRow[]
+  calendarDays: CalendarDayRow[],
+  now: Date = new Date()
 ): DashboardCalendarHighlights {
-  const todayKey = localTodayKey();
+  const todayKey = localTodayKey(now);
   const sorted = [...calendarDays].sort((a, b) =>
     calendarDateKey(a.date).localeCompare(calendarDateKey(b.date))
   );
@@ -53,17 +56,10 @@ export function buildDashboardCalendarHighlights(
       isAttendanceNeeded(day.sessionType) && day.lessonPlanNumber != null
   );
 
-  const todayWeek = attendanceWeeks.find(
-    (day) => calendarDateKey(day.date) === todayKey
-  );
-  const latestPastWeek = [...attendanceWeeks]
-    .reverse()
-    .find((day) => calendarDateKey(day.date) <= todayKey);
-  const nextWeek = attendanceWeeks.find(
-    (day) => calendarDateKey(day.date) > todayKey
-  );
-
-  const currentDay = todayWeek ?? latestPastWeek ?? nextWeek ?? null;
+  const currentDay =
+    selectDefaultCalendarDay(attendanceWeeks, now) ??
+    selectDefaultCalendarDay(sorted, now) ??
+    null;
 
   const upcomingQuiz =
     currentDay &&
@@ -127,5 +123,27 @@ export async function fetchDashboardCalendarHighlights(
 
   if (calendarDays.length === 0) return null;
 
-  return buildDashboardCalendarHighlights(calendarDays);
+  const yearLink = await prisma.academicYearSchool.findFirst({
+    where: { id: academicYearSchoolId, deletedAt: null },
+    select: { academicYearId: true },
+  });
+  const holidayRows = yearLink
+    ? await prisma.academicYearHoliday.findMany({
+        where: { academicYearId: yearLink.academicYearId, deletedAt: null },
+        select: { date: true, name: true },
+      })
+    : [];
+  const holidayNameByDate = new Map(
+    holidayRows.map((h) => [calendarDateKey(h.date), h.name?.trim() || null])
+  );
+
+  const highlights = buildDashboardCalendarHighlights(calendarDays);
+  return {
+    ...highlights,
+    upcomingHolidays: highlights.upcomingHolidays.map((holiday) => ({
+      ...holiday,
+      label:
+        holidayNameByDate.get(calendarDateKey(holiday.date)) || holiday.label,
+    })),
+  };
 }

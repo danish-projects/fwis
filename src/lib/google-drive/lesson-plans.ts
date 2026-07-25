@@ -8,8 +8,9 @@ import {
   listDrivePdfFiles,
 } from "@/lib/google-drive/client";
 import {
+  getFwisDocsParentFolderId,
   getGoogleDriveServiceAccount,
-  isGoogleDriveConfigured,
+  isLessonPlanDriveConfigured,
 } from "@/lib/google-drive/config";
 
 /** Subfolder under each academic year folder, e.g. FWIS Docs/2024-2025/Lesson Plans */
@@ -54,7 +55,6 @@ function matchesLessonPlanFile(
 
   if (normalized === expected) return true;
 
-  // Also accept non-zero-padded week numbers, e.g. "Grade 1 - Week - 1".
   const expectedUnpadded = normalizeFileName(
     `${gradeName} - Week - ${lessonPlanNumber}`
   );
@@ -62,7 +62,26 @@ function matchesLessonPlanFile(
 }
 
 export function isLessonPlanDriveReady(): boolean {
-  return isGoogleDriveConfigured();
+  return isLessonPlanDriveConfigured();
+}
+
+/**
+ * Resolve FWIS Docs/{academicYearName} under GOOGLE_DRIVE_FWIS_DOCS_FOLDER_ID.
+ */
+export async function resolveAcademicYearDriveFolderId(
+  academicYearName: string
+): Promise<string | null> {
+  const parentId = getFwisDocsParentFolderId();
+  const account = getGoogleDriveServiceAccount();
+  if (!parentId || !account) return null;
+
+  const accessToken = await getGoogleDriveAccessToken(account);
+  const yearFolder = await findDriveFolderByName(
+    accessToken,
+    parentId,
+    academicYearName.trim()
+  );
+  return yearFolder?.id ?? null;
 }
 
 function buildLessonPlanFileNameCandidates(
@@ -71,12 +90,7 @@ function buildLessonPlanFileNameCandidates(
 ): string[] {
   const padded = buildLessonPlanFileBaseName(gradeName, lessonPlanNumber);
   const unpadded = `${gradeName} - Week - ${lessonPlanNumber}`;
-  return [
-    `${padded}.pdf`,
-    padded,
-    `${unpadded}.pdf`,
-    unpadded,
-  ];
+  return [`${padded}.pdf`, padded, `${unpadded}.pdf`, unpadded];
 }
 
 async function resolveLessonPlansFolderId(
@@ -90,7 +104,6 @@ async function resolveLessonPlansFolderId(
   );
   if (subfolder) return subfolder.id;
 
-  // Allow storing the Lesson Plans folder ID directly on the academic year.
   const files = await listDriveFilesInFolder(accessToken, academicYearFolderId);
   const hasLessonPlanFiles = files.some(
     (file) =>
@@ -174,7 +187,7 @@ function parseLessonPlanNumberFromFileName(
 }
 
 export async function listLessonPlanDriveFilesForGrade(params: {
-  academicYearFolderId: string;
+  academicYearName: string;
   gradeName: string;
 }): Promise<LessonPlanDriveFile[]> {
   const account = getGoogleDriveServiceAccount();
@@ -182,10 +195,19 @@ export async function listLessonPlanDriveFilesForGrade(params: {
     throw new Error("Google Drive is not configured");
   }
 
+  const academicYearFolderId = await resolveAcademicYearDriveFolderId(
+    params.academicYearName
+  );
+  if (!academicYearFolderId) {
+    throw new Error(
+      `Academic year folder "${params.academicYearName}" was not found under FWIS Docs`
+    );
+  }
+
   const accessToken = await getGoogleDriveAccessToken(account);
   const lessonPlansFolderId = await resolveLessonPlansFolderId(
     accessToken,
-    params.academicYearFolderId
+    academicYearFolderId
   );
   if (!lessonPlansFolderId) return [];
 
@@ -213,7 +235,7 @@ export async function listLessonPlanDriveFilesForGrade(params: {
 }
 
 export async function findLessonPlanDriveFile(params: {
-  academicYearFolderId: string;
+  academicYearName: string;
   gradeName: string;
   lessonPlanNumber: number;
 }): Promise<LessonPlanDriveFile | null> {
@@ -222,10 +244,15 @@ export async function findLessonPlanDriveFile(params: {
     throw new Error("Google Drive is not configured");
   }
 
+  const academicYearFolderId = await resolveAcademicYearDriveFolderId(
+    params.academicYearName
+  );
+  if (!academicYearFolderId) return null;
+
   const accessToken = await getGoogleDriveAccessToken(account);
   const lessonPlansFolderId = await resolveLessonPlansFolderId(
     accessToken,
-    params.academicYearFolderId
+    academicYearFolderId
   );
   if (!lessonPlansFolderId) return null;
 

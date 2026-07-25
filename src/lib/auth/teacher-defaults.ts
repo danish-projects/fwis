@@ -10,6 +10,8 @@ import {
   getSelectedAcademicYear,
   resolveAcademicYearForSchool,
 } from "@/lib/academic-year/resolve-year";
+import { pickSchoolLink } from "@/lib/classrooms/ensure-classroom-for-school";
+import { getSelectedSchool } from "@/lib/school/resolve-school";
 
 export async function getTeacherPrimaryClassroomId(
   user: AuthUser
@@ -20,21 +22,42 @@ export async function getTeacherPrimaryClassroomId(
   const classrooms = await prisma.classroom.findMany({
     where: { id: { in: user.classroomIds }, deletedAt: null, isActive: true },
     orderBy: { name: "asc" },
-    select: { id: true, name: true, school: { select: { name: true } } },
+    select: { id: true },
   });
   return classrooms[0]?.id ?? null;
 }
 
 export async function getTeacherClassrooms(user: AuthUser) {
   if (!user.roles.includes("TEACHER")) return [];
-  return prisma.classroom.findMany({
+  const selectedSchool = await getSelectedSchool(user);
+  const preferredSchoolIds = [
+    ...(selectedSchool ? [selectedSchool.id] : []),
+    ...user.schoolIds,
+  ];
+
+  const classrooms = await prisma.classroom.findMany({
     where: { id: { in: user.classroomIds }, deletedAt: null, isActive: true },
     orderBy: { name: "asc" },
     include: {
-      school: { select: { name: true } },
+      schoolLinks: {
+        where: { deletedAt: null, isActive: true },
+        include: { school: { select: { name: true } } },
+      },
       grade: { select: { name: true, sortOrder: true } },
       section: { select: { name: true } },
     },
+  });
+
+  return classrooms.map((classroom) => {
+    const link = pickSchoolLink(classroom.schoolLinks, preferredSchoolIds);
+    return {
+      ...classroom,
+      schoolId: link?.schoolId ?? "",
+      school: link?.school ?? { name: "" },
+      schoolLinks: classroom.schoolLinks.map((l) => ({ schoolId: l.schoolId })),
+      gradeId: classroom.gradeId,
+      grade: classroom.grade,
+    };
   });
 }
 
@@ -43,15 +66,28 @@ export async function getDefaultAttendanceDayId(
 ): Promise<string | undefined> {
   const user = await getSessionUser();
   const selectedYear = user ? await getSelectedAcademicYear(user) : null;
+  const selectedSchool = user ? await getSelectedSchool(user) : null;
 
   const classroom = await prisma.classroom.findUnique({
     where: { id: classroomId },
-    select: { schoolId: true },
+    select: {
+      schoolLinks: {
+        where: { deletedAt: null, isActive: true },
+        select: { schoolId: true },
+      },
+    },
   });
   if (!classroom) return undefined;
 
+  const preferredSchoolIds = [
+    ...(selectedSchool ? [selectedSchool.id] : []),
+    ...(user?.schoolIds ?? []),
+  ];
+  const schoolLink = pickSchoolLink(classroom.schoolLinks, preferredSchoolIds);
+  if (!schoolLink) return undefined;
+
   const activeYear = await resolveAcademicYearForSchool(
-    classroom.schoolId,
+    schoolLink.schoolId,
     selectedYear
   );
   if (!activeYear) return undefined;
@@ -84,8 +120,5 @@ export async function redirectTeacherToAssessments() {
   const user = await getSessionUser();
   if (!user || getPrimaryRole(user.roles) !== "TEACHER") return;
 
-  const classroomId = await getTeacherPrimaryClassroomId(user);
-  if (!classroomId) return;
-
-  redirect(`/teacher/assessments/${classroomId}`);
+  redirect("/teacher/assessments");
 }

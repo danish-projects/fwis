@@ -16,13 +16,13 @@ export function assertSchoolScope(
 
   if (city.toLowerCase() !== expectedCity.toLowerCase()) {
     throw new Error(
-      `${sheetName} row ${rowIndex}: school_city "${city}" does not match School_Setup "${expectedCity}".`
+      `${sheetName} row ${rowIndex}: school_city "${city}" does not match workbook school "${expectedCity}".`
     );
   }
 
   if (state !== expectedState.toUpperCase()) {
     throw new Error(
-      `${sheetName} row ${rowIndex}: school_state "${state}" does not match School_Setup "${expectedState}".`
+      `${sheetName} row ${rowIndex}: school_state "${state}" does not match workbook school "${expectedState}".`
     );
   }
 }
@@ -39,7 +39,7 @@ export function assertAcademicYearScope(
   }
   if (year !== expectedYear) {
     throw new Error(
-      `${sheetName} row ${rowIndex}: academic_year "${year}" does not match School_Setup "${expectedYear}".`
+      `${sheetName} row ${rowIndex}: academic_year "${year}" does not match workbook year "${expectedYear}".`
     );
   }
 }

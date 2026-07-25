@@ -10,18 +10,38 @@ import { cn } from "@/lib/utils";
 type AcademicYearSwitcherProps = {
   years: AcademicYearSummary[];
   selectedYearId: string | null;
+  /** When false, show current year as read-only (teachers / substitutes). */
+  canSwitch?: boolean;
   className?: string;
 };
 
 export function AcademicYearSwitcher({
   years,
   selectedYearId,
+  canSwitch = true,
   className,
 }: AcademicYearSwitcherProps) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
 
   if (years.length === 0) return null;
+
+  const selected =
+    years.find((y) => y.id === selectedYearId) ?? years[0] ?? null;
+
+  if (!canSwitch) {
+    return (
+      <div className={cn("px-3 pb-3", className)}>
+        <label className="mb-1.5 flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+          <CalendarRange className="h-3.5 w-3.5" />
+          Academic Year
+        </label>
+        <p className="flex h-9 items-center rounded-md border border-input bg-muted/40 px-2.5 text-sm">
+          {selected?.label ?? "—"}
+        </p>
+      </div>
+    );
+  }
 
   function handleChange(event: React.ChangeEvent<HTMLSelectElement>) {
     const nextId = event.target.value;

@@ -26,17 +26,6 @@ export const ASSESSMENT_COLUMN_FILTER_OPTIONS: Array<{
   { value: "FINAL_EXAM", label: ASSESSMENT_TYPE_LABELS.FINAL_EXAM },
 ];
 
-export const TRANSCRIPT_COLUMN_FILTER_OPTIONS: Array<{
-  value: AssessmentColumnFilter;
-  label: string;
-}> = [
-  { value: ALL_ASSESSMENT_COLUMNS_VALUE, label: "All" },
-  ...QUIZ_TYPES.map((type) => ({
-    value: type as AssessmentColumnFilter,
-    label: ASSESSMENT_TYPE_LABELS[type],
-  })),
-];
-
 export function getVisibleAssessmentColumns(
   filter: AssessmentColumnFilter
 ): AssessmentTypeCode[] {
@@ -46,14 +35,12 @@ export function getVisibleAssessmentColumns(
   return [filter];
 }
 
-export function getVisibleTranscriptQuizColumns(
-  filter: AssessmentColumnFilter
-): Array<(typeof QUIZ_TYPES)[number]> {
-  if (filter === ALL_ASSESSMENT_COLUMNS_VALUE) {
-    return [...QUIZ_TYPES];
-  }
-  if (filter === "MIDTERM_PROJECT" || filter === "FINAL_EXAM") {
-    return [];
-  }
-  return [filter];
+export function parseAssessmentColumnFilter(
+  value: string | null | undefined
+): AssessmentColumnFilter {
+  if (!value) return ALL_ASSESSMENT_COLUMNS_VALUE;
+  const match = ASSESSMENT_COLUMN_FILTER_OPTIONS.find(
+    (option) => option.value === value
+  );
+  return match?.value ?? ALL_ASSESSMENT_COLUMNS_VALUE;
 }

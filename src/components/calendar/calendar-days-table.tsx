@@ -17,6 +17,8 @@ export type CalendarDayRow = {
   lessonPlanNumber: number | null;
   sessionType: string;
   attendanceCount: number;
+  /** From academic year holidays when session type is HOLIDAY. */
+  holidayName?: string | null;
 };
 
 type CalendarDaysTableProps = {
@@ -67,6 +69,7 @@ export function CalendarDaysTable({ days, canUpdate }: CalendarDaysTableProps) {
                 <th className="pb-3 pr-4 font-medium">Lesson Plan</th>
                 <th className="pb-3 pr-4 font-medium">Date</th>
                 <th className="pb-3 pr-4 font-medium">Session Type</th>
+                <th className="pb-3 pr-4 font-medium">Holiday / Notes</th>
                 <th className="pb-3 pr-4 font-medium">Attendance Needed</th>
                 <th className="pb-3 pr-4 font-medium">Records</th>
                 {canUpdate && <th className="pb-3 font-medium">Actions</th>}
@@ -75,6 +78,10 @@ export function CalendarDaysTable({ days, canUpdate }: CalendarDaysTableProps) {
             <tbody>
               {filteredDays.map((day) => {
                 const attendanceNeeded = isAttendanceNeeded(day.sessionType);
+                const holidayLabel =
+                  day.sessionType === "HOLIDAY"
+                    ? day.holidayName?.trim() || null
+                    : null;
 
                 return (
                   <tr key={day.id} className="border-b last:border-0">
@@ -86,6 +93,9 @@ export function CalendarDaysTable({ days, canUpdate }: CalendarDaysTableProps) {
                       <Badge variant="outline">
                         {SESSION_TYPE_LABELS[asSessionType(day.sessionType)]}
                       </Badge>
+                    </td>
+                    <td className="py-3 pr-4 text-muted-foreground">
+                      {holidayLabel ?? "—"}
                     </td>
                     <td className="py-3 pr-4">
                       <Badge variant={attendanceNeeded ? "success" : "secondary"}>
@@ -108,7 +118,7 @@ export function CalendarDaysTable({ days, canUpdate }: CalendarDaysTableProps) {
               {filteredDays.length === 0 && (
                 <tr>
                   <td
-                    colSpan={canUpdate ? 6 : 5}
+                    colSpan={canUpdate ? 7 : 6}
                     className="py-8 text-center text-muted-foreground"
                   >
                     {sessionTypeFilter

@@ -21,6 +21,8 @@ import { selectDefaultCalendarDayId } from "@/lib/calendar/select-default-day";
 import { sendAbsentNotification } from "@/lib/email/send-absent-notification";
 import { decryptStudentPii } from "@/lib/students/student-pii";
 import { getSelectedAcademicYear, resolveAcademicYearForSchool, resolveAcademicYearIdsForSchools } from "@/lib/academic-year/resolve-year";
+import { pickSchoolLink } from "@/lib/classrooms/ensure-classroom-for-school";
+import { getSelectedSchool } from "@/lib/school/resolve-school";
 
 import {
   bulkAttendanceMatrixSchema,
@@ -102,7 +104,7 @@ export async function bulkUpsertAttendance(
     }
 
     if (
-      !user.roles.includes("SUPER_ADMIN") &&
+      !user.roles.includes("NIGRA") &&
       !isClassroomScopedUser(user) &&
       !user.schoolIds.includes(enrollment.schoolId)
     ) {
@@ -141,10 +143,25 @@ export async function bulkUpsertAttendance(
 
     if (becameAbsent) {
       const student = decryptStudentPii(enrollment.student);
-      if (student.parentEmail) {
+      if (student.emailAddress) {
+        const guardianName = [
+          student.fatherGuardianFirstName,
+          student.fatherGuardianLastName,
+        ]
+          .filter(Boolean)
+          .join(" ")
+          .trim() ||
+          [
+            student.motherGuardianFirstName,
+            student.motherGuardianLastName,
+          ]
+            .filter(Boolean)
+            .join(" ")
+            .trim() ||
+          null;
         const result = await sendAbsentNotification({
-          parentEmail: student.parentEmail,
-          parentName: student.parentName,
+          parentEmail: student.emailAddress,
+          parentName: guardianName,
           studentName: `${student.firstName} ${student.lastName}`,
           schoolName: enrollment.school.name,
           classroomName: enrollment.classroom.name,
@@ -189,27 +206,44 @@ export async function getAttendanceSession(
     throw new Error("Unauthorized classroom access");
   }
 
-  const [classroom, selectedYear] = await Promise.all([
+  const [classroom, selectedYear, selectedSchool] = await Promise.all([
     prisma.classroom.findFirst({
       where: { id: classroomId, deletedAt: null },
       include: {
         grade: true,
         section: true,
-        school: true,
+        schoolLinks: {
+          where: { deletedAt: null, isActive: true },
+          include: { school: true },
+        },
       },
     }),
     getSelectedAcademicYear(user),
+    getSelectedSchool(user),
   ]);
   if (!classroom) return null;
 
+  const preferredSchoolIds = [
+    ...(selectedSchool ? [selectedSchool.id] : []),
+    ...user.schoolIds,
+  ];
+  const schoolLink = pickSchoolLink(classroom.schoolLinks, preferredSchoolIds);
+  if (!schoolLink) return null;
+
+  const classroomWithSchool = {
+    ...classroom,
+    schoolId: schoolLink.schoolId,
+    school: schoolLink.school,
+  };
+
   const activeYear = await resolveAcademicYearForSchool(
-    classroom.schoolId,
+    schoolLink.schoolId,
     selectedYear
   );
 
   if (!activeYear) {
     return {
-      classroom,
+      classroom: classroomWithSchool,
       activeYear: null,
       calendarDays: [],
       selectedDay: null,
@@ -301,7 +335,7 @@ export async function getAttendanceSession(
   }
 
   return {
-    classroom,
+    classroom: classroomWithSchool,
     activeYear,
     calendarDays: calendarDays.map((d) => ({
       ...d,
@@ -344,7 +378,9 @@ async function attachEnrollmentCounts<
 ): Promise<Array<T & { _count: { enrollments: number } }>> {
   if (classrooms.length === 0) return [];
 
-  const schoolIds = [...new Set(classrooms.map((c) => c.schoolId))];
+  const schoolIds = [
+    ...new Set(classrooms.map((c) => c.schoolId).filter((id) => Boolean(id))),
+  ];
   const yearBySchool = await resolveAcademicYearIdsForSchools(
     schoolIds,
     selectedYear
@@ -387,19 +423,38 @@ export async function getClassroomsForAttendance() {
     where,
     orderBy: { name: "asc" },
     include: {
-      school: { select: { name: true } },
+      schoolLinks: {
+        where: {
+          deletedAt: null,
+          isActive: true,
+          ...(user.roles.includes("NIGRA")
+            ? {}
+            : { schoolId: { in: user.schoolIds } }),
+        },
+        include: { school: { select: { name: true } } },
+      },
       grade: { select: { name: true, sortOrder: true } },
       section: { select: { name: true } },
     },
   });
 
-  return attachEnrollmentCounts(classrooms, selectedYear);
+  const mapped = classrooms.flatMap((c) => {
+    if (c.schoolLinks.length === 0) return [];
+    return c.schoolLinks.map((link) => ({
+      ...c,
+      schoolId: link.schoolId,
+      school: link.school,
+      schoolLinks: c.schoolLinks.map((l) => ({ schoolId: l.schoolId })),
+    }));
+  });
+
+  return attachEnrollmentCounts(mapped, selectedYear);
 }
 
 export async function getSchoolsForAttendanceSummary() {
   const user = await requirePermission("attendance:read");
 
-  const where = user.roles.includes("SUPER_ADMIN")
+  const where = user.roles.includes("NIGRA")
     ? { deletedAt: null, isActive: true }
     : { id: { in: user.schoolIds }, deletedAt: null, isActive: true };
 
@@ -416,7 +471,7 @@ export async function getClassroomsForConsolidateAttendance(schoolId: string) {
   const schoolYear = await resolveAcademicYearForSchool(schoolId, selectedYear);
 
   if (
-    !user.roles.includes("SUPER_ADMIN") &&
+    !user.roles.includes("NIGRA") &&
     !user.schoolIds.includes(schoolId)
   ) {
     throw new Error("Unauthorized school access");
@@ -426,7 +481,9 @@ export async function getClassroomsForConsolidateAttendance(schoolId: string) {
 
   return prisma.classroom.findMany({
     where: {
-      schoolId,
+      schoolLinks: {
+        some: { schoolId, deletedAt: null, isActive: true },
+      },
       deletedAt: null,
       isActive: true,
       ...classroomFilter,
@@ -454,7 +511,7 @@ export async function getGradesForAttendanceSummary(schoolId: string) {
   const schoolYear = await resolveAcademicYearForSchool(schoolId, selectedYear);
 
   if (
-    !user.roles.includes("SUPER_ADMIN") &&
+    !user.roles.includes("NIGRA") &&
     !user.schoolIds.includes(schoolId)
   ) {
     throw new Error("Unauthorized school access");
@@ -466,7 +523,9 @@ export async function getGradesForAttendanceSummary(schoolId: string) {
     where: {
       classrooms: {
         some: {
-          schoolId,
+          schoolLinks: {
+            some: { schoolId, deletedAt: null, isActive: true },
+          },
           deletedAt: null,
           isActive: true,
           ...classroomFilter,
@@ -500,7 +559,7 @@ export async function getGradeAttendanceMatrix(
   const selectedYear = await getSelectedAcademicYear(user);
 
   if (
-    !user.roles.includes("SUPER_ADMIN") &&
+    !user.roles.includes("NIGRA") &&
     !user.schoolIds.includes(schoolId)
   ) {
     throw new Error("Unauthorized school access");
@@ -527,7 +586,9 @@ export async function getGradeAttendanceMatrix(
       ? await prisma.classroom.findFirst({
           where: {
             id: classroomId,
-            schoolId,
+            schoolLinks: {
+              some: { schoolId, deletedAt: null, isActive: true },
+            },
             deletedAt: null,
             isActive: true,
           },
@@ -560,9 +621,11 @@ export async function getGradeAttendanceMatrix(
     classroomId?: string | { in: string[] };
     classroom?: {
       gradeId: number;
-      schoolId: string;
       deletedAt: null;
       isActive: true;
+      schoolLinks: {
+        some: { schoolId: string; deletedAt: null; isActive: true };
+      };
       id?: { in: string[] };
     };
   } = {
@@ -584,9 +647,11 @@ export async function getGradeAttendanceMatrix(
   } else if (gradeId != null) {
     enrollmentWhere.classroom = {
       gradeId,
-      schoolId,
       deletedAt: null,
       isActive: true,
+      schoolLinks: {
+        some: { schoolId, deletedAt: null, isActive: true },
+      },
       ...scopedClassroomIdFilter(user),
     };
   } else if (isClassroomScopedUser(user) && user.classroomIds.length > 0) {

@@ -6,7 +6,19 @@ import {
 } from "@/lib/validations/academic-year";
 import { isAttendanceNeeded } from "@/lib/grades/attendance-percentage";
 import { buildSessionTypeCounts, countAttendanceNeededDays, pickSessionTypeCounts } from "@/lib/calendar/session-type-counts";
-import { sectionNameForGender } from "@/lib/teachers/gender-section";
+import { calendarDateKey, parseCalendarDateInput } from "@/lib/calendar/calendar-date";
+import { generateSundays } from "@/lib/calendar/generate-sundays";
+import { buildImportCalendar, validateImportCalendar } from "../../../scripts/import/validate-calendar";
+import {
+  buildHoustonAdminSpecs,
+  isHoustonSchool,
+} from "../../../scripts/import/ensure-houston-admin-logins";
+import { hashPassword, verifyPassword } from "@/lib/auth/password";
+import {
+  createSessionToken,
+  parseSessionToken,
+} from "@/lib/auth/session-cookie";
+import { sectionNameForGender } from "@/lib/staff/gender-section";
 import { buildClassroomListWhere } from "@/lib/auth/section-scope";
 import { IDS, mockUser } from "../mocks/fixtures";
 
@@ -53,10 +65,55 @@ describe("Feature: School setup", () => {
   });
 
   it("Scenario: Classroom list is scoped to selected school", () => {
-    const where = buildClassroomListWhere(mockUser(["SUPER_ADMIN"]), {
+    const where = buildClassroomListWhere(mockUser(["NIGRA"]), {
       schoolId: IDS.schoolHou,
     });
-    expect(where).toMatchObject({ schoolId: IDS.schoolHou, deletedAt: null });
+    expect(where).toMatchObject({
+      deletedAt: null,
+      schoolLinks: {
+        some: { schoolId: IDS.schoolHou, deletedAt: null },
+      },
+    });
+  });
+
+  it("Scenario: Generated Sundays include the academic year end date when it is a Sunday", () => {
+    const start = parseCalendarDateInput("2025-08-10");
+    const end = parseCalendarDateInput("2026-05-10");
+    const keys = generateSundays(start, end).map(calendarDateKey);
+    expect(keys).toContain("2026-05-10");
+  });
+
+  it("Scenario: Import calendar accepts optional row on the year end Sunday", () => {
+    const start = parseCalendarDateInput("2025-08-10");
+    const end = parseCalendarDateInput("2026-05-10");
+    const calendar = buildImportCalendar(start, end, [
+      { date: "2026-05-10", session_type: "GRADUATION" },
+    ]);
+    expect(calendar.get("2026-05-10")).toBe("GRADUATION");
+  });
+
+  it("Scenario: Import calendar does not require assessment rows for every student", () => {
+    const start = parseCalendarDateInput("2025-08-10");
+    const end = parseCalendarDateInput("2026-05-10");
+    const summary = validateImportCalendar(
+      start,
+      end,
+      [{ date: "2025-08-10", session_type: "QUIZ_1" }],
+      [],
+      []
+    );
+    expect(summary.calendarAssessmentColumns).toContain("quiz_1");
+  });
+
+  it("Scenario: Houston import defines fifteen standard login accounts", () => {
+    expect(isHoustonSchool("Houston")).toBe(true);
+    expect(isHoustonSchool("Chicago")).toBe(false);
+    const logins = buildHoustonAdminSpecs().map((spec) => spec.loginUserId);
+    expect(logins).toContain("hou.principal");
+    expect(logins).toContain("hou.m.admin");
+    expect(logins).toContain("hou.b.g3");
+    expect(logins).toContain("hou.b.g6");
+    expect(logins).toHaveLength(15);
   });
 
   it("Scenario: Calendar session type counts summarize school year days", () => {
@@ -86,5 +143,19 @@ describe("Feature: School setup", () => {
         { sessionType: "PARENT_MEETING" },
       ])
     ).toBe(2);
+  });
+
+  it("Scenario: Password hashing verifies login credentials", async () => {
+    const hash = await hashPassword("test-password");
+    expect(await verifyPassword("test-password", hash)).toBe(true);
+    expect(await verifyPassword("wrong", hash)).toBe(false);
+  });
+
+  it("Scenario: Session tokens round-trip with Web Crypto signing", async () => {
+    process.env.AUTH_SESSION_SECRET = "test-session-secret-at-least-32-chars";
+    const token = await createSessionToken("00000000-0000-4000-8000-000000000001");
+    const payload = await parseSessionToken(token);
+    expect(payload?.userId).toBe("00000000-0000-4000-8000-000000000001");
+    expect(payload?.exp).toBeGreaterThan(Math.floor(Date.now() / 1000));
   });
 });

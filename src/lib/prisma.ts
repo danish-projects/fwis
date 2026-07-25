@@ -1,4 +1,4 @@
-import { PrismaClient } from "@prisma/client";
+import { PrismaClient } from "@/generated/prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 
 type LogLevel = "query" | "info" | "warn" | "error";
@@ -7,10 +7,14 @@ type LogLevel = "query" | "info" | "warn" | "error";
 type PgPoolOptions = {
   connectionString: string;
   ssl?: { rejectUnauthorized: boolean };
+  max?: number;
+  connectionTimeoutMillis?: number;
+  idleTimeoutMillis?: number;
+  allowExitOnIdle?: boolean;
 };
 
-function isSupabaseUrl(url: string): boolean {
-  return url.includes("supabase.com") || url.includes("supabase.co");
+function isRemoteHostedPostgres(url: string): boolean {
+  return url.includes("site4now.net");
 }
 
 /** Remove sslmode params so pg uses the explicit `ssl` config instead. */
@@ -30,18 +34,28 @@ function stripSslQueryParams(url: string): string {
 }
 
 function createPgPoolConfig(rawUrl: string): PgPoolOptions {
-  if (!isSupabaseUrl(rawUrl)) {
+  if (!isRemoteHostedPostgres(rawUrl)) {
     return { connectionString: rawUrl };
   }
 
-  const connectionString = stripSslQueryParams(rawUrl);
-  // Supabase pooler certs often fail strict verification on shared Windows hosts.
   const rejectUnauthorized =
     process.env.DATABASE_SSL_REJECT_UNAUTHORIZED === "true";
+  // SmarterASP shared plans allow few concurrent connections; keep the pool small.
+  const max = Number(process.env.DATABASE_POOL_MAX ?? 5);
+  const connectionTimeoutMillis = Number(
+    process.env.DATABASE_CONNECT_TIMEOUT_MS ?? 15_000
+  );
 
   return {
-    connectionString,
+    connectionString: stripSslQueryParams(rawUrl),
     ssl: { rejectUnauthorized },
+    max: Number.isFinite(max) && max > 0 ? max : 5,
+    // Fail fast instead of hanging when the host/port is unreachable (e.g. :5432).
+    connectionTimeoutMillis: Number.isFinite(connectionTimeoutMillis)
+      ? connectionTimeoutMillis
+      : 15_000,
+    idleTimeoutMillis: 30_000,
+    allowExitOnIdle: true,
   };
 }
 
@@ -61,19 +75,26 @@ export function createPrismaClient(connectionString?: string) {
   return new PrismaClient({ adapter, log });
 }
 
+/** Bump when schema/runtime client shape changes so HMR does not reuse a stale client. */
+const PRISMA_CLIENT_CACHE_KEY = "fwis-prisma-20250721-pool-timeout";
+
 const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined;
+  prismaCacheKey?: string;
 };
 
 function resolvePrismaClient(): PrismaClient {
-  const cached = globalForPrisma.prisma;
-  if (cached && "gradingScaleConfig" in cached) {
-    return cached;
+  if (
+    globalForPrisma.prisma &&
+    globalForPrisma.prismaCacheKey === PRISMA_CLIENT_CACHE_KEY
+  ) {
+    return globalForPrisma.prisma;
   }
 
   const client = createPrismaClient();
   if (process.env.NODE_ENV !== "production") {
     globalForPrisma.prisma = client;
+    globalForPrisma.prismaCacheKey = PRISMA_CLIENT_CACHE_KEY;
   }
   return client;
 }

@@ -22,19 +22,21 @@ export async function assertLessonPlanGradeAccess(
 
   const schoolClassroom = await prisma.classroom.findFirst({
     where: {
-      schoolId,
       gradeId,
       deletedAt: null,
       isActive: true,
+      schoolLinks: {
+        some: { schoolId, deletedAt: null, isActive: true },
+      },
     },
-    select: { id: true, schoolId: true },
+    select: { id: true },
   });
 
   if (!schoolClassroom) {
     throw new Error("Grade not found for this school");
   }
 
-  if (user.roles.includes("SUPER_ADMIN")) {
+  if (user.roles.includes("NIGRA")) {
     return { grade, schoolId };
   }
 
@@ -45,11 +47,13 @@ export async function assertLessonPlanGradeAccess(
   if (user.roles.includes("TEACHER")) {
     const hasGradeAccess = await prisma.classroom.findFirst({
       where: {
-        schoolId,
         gradeId,
         id: { in: user.classroomIds },
         deletedAt: null,
         isActive: true,
+        schoolLinks: {
+          some: { schoolId, deletedAt: null, isActive: true },
+        },
       },
       select: { id: true },
     });

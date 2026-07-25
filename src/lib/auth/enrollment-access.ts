@@ -58,7 +58,7 @@ export async function assertUserSchoolAccess(
   user: AuthUser,
   schoolId: string
 ): Promise<void> {
-  if (user.roles.includes("SUPER_ADMIN")) return;
+  if (user.roles.includes("NIGRA")) return;
   if (!user.schoolIds.includes(schoolId)) {
     throw new Error("Unauthorized school access");
   }
@@ -112,7 +112,7 @@ export async function assertEnrollmentAccess(
   user: AuthUser,
   enrollmentId: string
 ): Promise<boolean> {
-  if (user.roles.includes("SUPER_ADMIN")) return true;
+  if (user.roles.includes("NIGRA")) return true;
 
   const { prisma } = await import("@/lib/prisma");
   const enrollment = await prisma.studentEnrollment.findUnique({
@@ -131,16 +131,26 @@ export async function assertClassroomAccess(
   user: AuthUser,
   classroomId: string
 ): Promise<boolean> {
-  if (user.roles.includes("SUPER_ADMIN")) return true;
+  if (user.roles.includes("NIGRA")) return true;
 
   if (isClassroomScopedUser(user)) {
     return user.classroomIds.includes(classroomId);
   }
 
   const { prisma } = await import("@/lib/prisma");
-  const classroom = await prisma.classroom.findUnique({
-    where: { id: classroomId },
+  const classroom = await prisma.classroom.findFirst({
+    where: {
+      id: classroomId,
+      deletedAt: null,
+      schoolLinks: {
+        some: {
+          schoolId: { in: user.schoolIds },
+          deletedAt: null,
+          isActive: true,
+        },
+      },
+    },
+    select: { id: true },
   });
-  if (!classroom) return false;
-  return user.schoolIds.includes(classroom.schoolId);
+  return Boolean(classroom);
 }

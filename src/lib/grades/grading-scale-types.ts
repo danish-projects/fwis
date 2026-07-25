@@ -27,22 +27,21 @@ export const DEFAULT_GRADING_SCALE_WEIGHTS: GradingScaleWeights = {
   QUIZ_3: 0.05,
   QUIZ_4: 0.05,
   QUIZ_5: 0.05,
-  MIDTERM_PROJECT: 0.15,
-  FINAL_EXAM: 0.4,
+  MIDTERM_PROJECT: 0.1,
+  FINAL_EXAM: 0.45,
 };
 
 export const DEFAULT_LETTER_BANDS: LetterBand[] = [
   { letter: "A", minPct: 90 },
   { letter: "B", minPct: 80 },
   { letter: "C", minPct: 70 },
-  { letter: "D", minPct: 60 },
-  { letter: "F", minPct: 0 },
+  { letter: "D", minPct: 0 },
 ];
 
 export const DEFAULT_GRADING_SCALE: GradingScaleConfig = {
   weights: DEFAULT_GRADING_SCALE_WEIGHTS,
   letterBands: DEFAULT_LETTER_BANDS,
-  passMinPct: 60,
+  passMinPct: 70,
 };
 
 export const ASSESSMENT_WEIGHT_KEYS: AssessmentType[] = [

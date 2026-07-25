@@ -2,6 +2,7 @@ import type { AssessmentTypeCode } from "@/lib/setup-types";
 
 export type ScoreMatrixRow = {
   enrollmentId: string;
+  studentId: string;
   studentName: string;
   studentNumber: string | null;
   gender: string;

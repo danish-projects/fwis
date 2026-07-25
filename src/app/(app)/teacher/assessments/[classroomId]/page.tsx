@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { Suspense } from "react";
 import { getAssessmentMatrix } from "@/actions/assessments";
@@ -7,6 +8,8 @@ import { getTeacherClassrooms } from "@/lib/auth/teacher-defaults";
 import { AssessmentMatrix } from "@/components/assessments/assessment-matrix";
 import { AssessmentsClassroomContent } from "@/components/assessments/assessments-classroom-content";
 import { ClassroomEntryLoading } from "@/components/shared/grade-change-loading";
+import { Button } from "@/components/ui/button";
+import { parseAssessmentColumnFilter } from "@/lib/assessments/assessment-column-filter";
 import { filterClassroomsForSelectedSchool } from "@/lib/school/filter-classrooms";
 import { getSelectedSchool } from "@/lib/school/resolve-school";
 
@@ -14,7 +17,7 @@ export const metadata = { title: "Assessment Scores" };
 
 type PageProps = {
   params: Promise<{ classroomId: string }>;
-  searchParams: Promise<{ year?: string }>;
+  searchParams: Promise<{ year?: string; column?: string }>;
 };
 
 export default async function TeacherAssessmentsClassPage({
@@ -23,7 +26,8 @@ export default async function TeacherAssessmentsClassPage({
 }: PageProps) {
   const user = await requireRole("TEACHER");
   const { classroomId } = await params;
-  const { year } = await searchParams;
+  const { year, column } = await searchParams;
+  const initialColumnFilter = parseAssessmentColumnFilter(column);
 
   if (!(await assertClassroomAccess(user, classroomId))) {
     redirect("/dashboard/teacher");
@@ -55,6 +59,9 @@ export default async function TeacherAssessmentsClassPage({
   return (
     <div className="space-y-6">
       <div>
+        <Button asChild variant="ghost" size="sm" className="mb-2 -ml-2">
+          <Link href="/teacher/assessments">← Back to assessments</Link>
+        </Button>
         <h1 className="text-2xl font-bold md:text-3xl">
           {data.classroom.name} — Assessments
         </h1>
@@ -72,8 +79,10 @@ export default async function TeacherAssessmentsClassPage({
         >
           <AssessmentMatrix
             classroomId={classroomId}
+            academicYearId={data.academicYear?.id}
             rows={data.rows}
             columnDates={data.columnDates}
+            initialColumnFilter={initialColumnFilter}
           />
         </AssessmentsClassroomContent>
       </Suspense>

@@ -12,11 +12,23 @@ export function calendarDateKey(date: Date | string): string {
 }
 
 /** Local "today" as YYYY-MM-DD (school operates in the viewer's locale). */
-export function localTodayKey(): string {
-  const value = new Date();
-  const year = value.getFullYear();
-  const month = String(value.getMonth() + 1).padStart(2, "0");
-  const day = String(value.getDate()).padStart(2, "0");
+export function localTodayKey(now: Date = new Date()): string {
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+  const day = String(now.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+/**
+ * Sunday that starts the local week containing `now`.
+ * Sun → that day; Mon–Sat → the previous Sunday.
+ */
+export function localWeekSundayKey(now: Date = new Date()): string {
+  const local = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  local.setDate(local.getDate() - local.getDay());
+  const year = local.getFullYear();
+  const month = String(local.getMonth() + 1).padStart(2, "0");
+  const day = String(local.getDate()).padStart(2, "0");
   return `${year}-${month}-${day}`;
 }
 

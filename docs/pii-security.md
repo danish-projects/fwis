@@ -7,16 +7,16 @@ FWIS stores student and parent sensitive data. This document describes how it is
 These columns are stored as **AES-256-GCM** ciphertext in PostgreSQL:
 
 - Date of birth
-- Parent / guardian name
-- Parent phone
-- Parent email
-- Address
+- Email address
+- Street address, city, state/province, zip/postal code, country
+- Father / mother guardian names and mobile/WhatsApp numbers
 - Emergency contact
 
 Lookup hashes (HMAC-SHA256, not reversible) support duplicate detection:
 
-- `parent_phone_hash`
 - `date_of_birth_hash`
+- `father_mobile_whatsapp_hash`
+- `mother_mobile_whatsapp_hash`
 
 First name, last name, gender, and student number remain plaintext for sorting and display.
 
@@ -28,7 +28,7 @@ First name, last name, gender, and student number remain plaintext for sorting a
    openssl rand -base64 32
    ```
 
-2. Add to `.env.local` and Vercel:
+2. Add to `.env.local` and production env files (`.env.stage`, `.env.prod`):
 
    ```env
    PII_ENCRYPTION_KEY=your-base64-key-here
@@ -54,8 +54,8 @@ There is no built-in multi-key rotation yet — plan maintenance windows for key
 ## In transit
 
 - Browser traffic: HTTPS + HSTS (production)
-- Database: TLS to Supabase (strict cert verification in production; relaxed in local dev)
-- Supabase Auth / Resend: HTTPS
+- Database: TLS to SmarterASP PostgreSQL
+- Email (Resend): HTTPS
 
 ## Access control
 

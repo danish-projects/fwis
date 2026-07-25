@@ -37,9 +37,9 @@ export default async function SchoolDetailPage({ params }: PageProps) {
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {[
-          { label: "Teachers", value: school._count.teachers },
+          { label: "Staff", value: school._count.staff },
           { label: "Students", value: school._count.enrollments },
-          { label: "Grades", value: school._count.classrooms },
+          { label: "Grades", value: school._count.classroomSchools },
           {
             label: "Status",
             value: school.isActive ? "Active" : "Inactive",
@@ -82,10 +82,6 @@ export default async function SchoolDetailPage({ params }: PageProps) {
           <div>
             <p className="text-sm text-muted-foreground">Email</p>
             <p>{school.email ?? "—"}</p>
-          </div>
-          <div>
-            <p className="text-sm text-muted-foreground">Principal</p>
-            <p>{school.principalName ?? "—"}</p>
           </div>
           <div>
             <p className="text-sm text-muted-foreground">Status</p>

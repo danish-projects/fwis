@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { getSchoolBackupPageContext } from "@/actions/school-data-backup";
 import { SchoolBackupForm } from "@/components/backup/school-backup-form";
+import { ImportTemplateDownloadCard } from "@/components/backup/import-template-download-card";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { requirePermission, requireRole } from "@/lib/auth/session";
@@ -12,7 +13,7 @@ type PageProps = {
 };
 
 export default async function BackupPage({ searchParams }: PageProps) {
-  await requireRole("SUPER_ADMIN", "SCHOOL_ADMIN");
+  await requireRole("NIGRA", "SCHOOL_ADMIN");
   await requirePermission("reports:export");
 
   const params = await searchParams;
@@ -46,6 +47,8 @@ export default async function BackupPage({ searchParams }: PageProps) {
           showSchoolPicker={ctx.showSchoolPicker}
         />
       )}
+
+      <ImportTemplateDownloadCard />
     </div>
   );
 }

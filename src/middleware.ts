@@ -1,5 +1,5 @@
 import type { NextRequest } from "next/server";
-import { updateSession } from "@/lib/supabase/middleware";
+import { updateSession } from "@/lib/auth/session-middleware";
 import { ensureHttpsRedirect } from "@/lib/security/ensure-https";
 import { applySecurityHeaders } from "@/lib/security/security-headers";
 import { rateLimitRequest } from "@/lib/security/rate-limit";

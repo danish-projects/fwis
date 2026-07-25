@@ -7,6 +7,7 @@ import { createAuditLog } from "@/lib/audit/create-audit-log";
 import { schoolSchema, schoolListSchema, type SchoolInput } from "@/lib/validations/school";
 import { deriveCityCode } from "@/lib/students/student-number";
 import { formatSchoolCode } from "@/lib/school/format-school-code";
+import { ensureSchoolDefaultLogins } from "@/lib/school/default-logins";
 
 function resolveCityCode(data: SchoolInput, existingCode?: string | null) {
   if (data.cityCode) return data.cityCode;
@@ -17,16 +18,27 @@ function resolveCityCode(data: SchoolInput, existingCode?: string | null) {
 export async function createSchool(data: SchoolInput) {
   const user = await requirePermission("schools:create");
   const parsed = schoolSchema.parse(data);
+  const { createDefaultUsers, ...schoolFields } = parsed;
   const cityCode = resolveCityCode(parsed);
 
   const school = await prisma.school.create({
     data: {
-      ...parsed,
+      ...schoolFields,
       code: formatSchoolCode(cityCode),
       cityCode,
-      email: parsed.email || null,
+      email: schoolFields.email || null,
     },
   });
+
+  let defaultLogins: Awaited<ReturnType<typeof ensureSchoolDefaultLogins>> | null =
+    null;
+  if (createDefaultUsers) {
+    defaultLogins = await ensureSchoolDefaultLogins(prisma, {
+      schoolId: school.id,
+      cityCode: school.cityCode,
+      city: school.city,
+    });
+  }
 
   await createAuditLog({
     userId: user.id,
@@ -34,16 +46,26 @@ export async function createSchool(data: SchoolInput) {
     entity: "School",
     entityId: school.id,
     action: "CREATE",
-    newValues: school,
+    newValues: {
+      ...school,
+      ...(defaultLogins
+        ? {
+            defaultUsersCreated: defaultLogins.created,
+            defaultUsersExisting: defaultLogins.existing,
+            defaultLogins: defaultLogins.logins,
+          }
+        : {}),
+    },
   });
 
   revalidatePath("/schools");
-  return school;
+  return { school, defaultLogins };
 }
 
 export async function updateSchool(id: string, data: SchoolInput) {
   const user = await requirePermission("schools:update", { schoolId: id });
   const parsed = schoolSchema.parse(data);
+  const { createDefaultUsers: _ignored, ...schoolFields } = parsed;
 
   const before = await prisma.school.findUnique({ where: { id } });
   if (!before || before.deletedAt) throw new Error("School not found");
@@ -53,10 +75,10 @@ export async function updateSchool(id: string, data: SchoolInput) {
   const school = await prisma.school.update({
     where: { id },
     data: {
-      ...parsed,
+      ...schoolFields,
       code: formatSchoolCode(cityCode),
       cityCode,
-      email: parsed.email || null,
+      email: schoolFields.email || null,
     },
   });
 
@@ -110,7 +132,7 @@ export async function getSchools(rawParams: {
 
   const where = {
     deletedAt: null,
-    ...(!user.roles.includes("SUPER_ADMIN") && user.schoolIds.length > 0
+    ...(!user.roles.includes("NIGRA") && user.schoolIds.length > 0
       ? { id: { in: user.schoolIds } }
       : {}),
     ...(search
@@ -153,9 +175,9 @@ export async function getSchoolById(id: string) {
     include: {
       _count: {
         select: {
-          teachers: { where: { deletedAt: null } },
+          staff: { where: { deletedAt: null } },
           enrollments: { where: { deletedAt: null } },
-          classrooms: { where: { deletedAt: null } },
+          classroomSchools: true,
         },
       },
     },

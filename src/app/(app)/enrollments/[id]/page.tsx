@@ -122,10 +122,10 @@ export default async function EnrollmentDetailPage({ params }: PageProps) {
             <p>{enrollment.school.name}</p>
           </div>
           <div>
-            <p className="text-sm text-muted-foreground">Teacher</p>
+            <p className="text-sm text-muted-foreground">Staff</p>
             <p>
-              {enrollment.teacher
-                ? `${enrollment.teacher.firstName} ${enrollment.teacher.lastName}`
+              {enrollment.staff
+                ? `${enrollment.staff.firstName} ${enrollment.staff.lastName}`
                 : "—"}
             </p>
           </div>

@@ -59,13 +59,13 @@ export function EditUserForm({
       </div>
       <Card>
         <CardHeader>
-          <CardTitle>{appUser.fullName ?? appUser.email}</CardTitle>
+          <CardTitle>{appUser.fullName ?? appUser.userId}</CardTitle>
         </CardHeader>
         <CardContent>
           <UserForm
             options={options}
             defaultValues={{
-              email: appUser.email,
+              userId: appUser.userId,
               fullName: appUser.fullName ?? "",
               roleCodes: appUser.roles.map((r) => r.role.code as UserRoleCode),
               schoolIds: appUser.schools.map((s) => s.schoolId),

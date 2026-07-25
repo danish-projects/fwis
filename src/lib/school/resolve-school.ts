@@ -9,7 +9,7 @@ async function assertUserCanAccessSchool(
   schoolId: string
 ): Promise<SchoolSummary | null> {
   if (
-    !user.roles.includes("SUPER_ADMIN") &&
+    !user.roles.includes("NIGRA") &&
     !user.schoolIds.includes(schoolId)
   ) {
     return null;
@@ -17,7 +17,7 @@ async function assertUserCanAccessSchool(
 
   const school = await prisma.school.findFirst({
     where: { id: schoolId, deletedAt: null, isActive: true },
-    select: { id: true, name: true },
+    select: { id: true, name: true, code: true, city: true },
   });
 
   return school;
@@ -77,7 +77,7 @@ export async function resolveListSchoolId(
   const selected = await getSelectedSchool(user);
   if (selected) return selected.id;
 
-  if (!user.roles.includes("SUPER_ADMIN") && user.schoolIds[0]) {
+  if (!user.roles.includes("NIGRA") && user.schoolIds[0]) {
     return user.schoolIds[0];
   }
 

@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState, useTransition } from "react";
 import { toast } from "sonner";
 import { AssessmentColumnFilterSelect } from "@/components/assessments/assessment-column-filter-select";
+import { MatrixExportButton } from "@/components/export/matrix-export-button";
 import { StudentNameWithGender } from "@/components/students/student-name-with-gender";
 import type { AssessmentType, GenderCode } from "@/lib/setup-types";
 import { bulkUpsertAssessmentScores } from "@/actions/assessments";
@@ -23,19 +24,23 @@ import { Input } from "@/components/ui/input";
 
 type AssessmentMatrixProps = {
   classroomId: string;
+  academicYearId?: string | null;
   rows: ScoreMatrixRow[];
   columnDates?: AssessmentColumnDates;
+  initialColumnFilter?: AssessmentColumnFilter;
 };
 
 export function AssessmentMatrix({
   classroomId,
+  academicYearId,
   rows: initialRows,
   columnDates = {},
+  initialColumnFilter = ALL_ASSESSMENT_COLUMNS_VALUE,
 }: AssessmentMatrixProps) {
   const router = useRouter();
   const [rows, setRows] = useState(initialRows);
   const [columnFilter, setColumnFilter] = useState<AssessmentColumnFilter>(
-    ALL_ASSESSMENT_COLUMNS_VALUE
+    initialColumnFilter
   );
   const [isPending, startTransition] = useTransition();
 
@@ -44,9 +49,19 @@ export function AssessmentMatrix({
     [columnFilter]
   );
 
+  const exportUrl = useMemo(() => {
+    const params = new URLSearchParams({ classroomId });
+    if (academicYearId) params.set("year", academicYearId);
+    return `/api/export/assessments?${params.toString()}`;
+  }, [classroomId, academicYearId]);
+
   useEffect(() => {
     setRows(initialRows);
   }, [initialRows]);
+
+  useEffect(() => {
+    setColumnFilter(initialColumnFilter);
+  }, [initialColumnFilter]);
 
   function updateScore(
     enrollmentId: string,
@@ -110,6 +125,10 @@ export function AssessmentMatrix({
             {visibleColumns.length === 1 ? "" : "s"} — choose All to see every quiz and exam.
           </p>
         )}
+        <MatrixExportButton
+          exportUrl={exportUrl}
+          disabled={rows.length === 0}
+        />
       </div>
 
       <div className="overflow-x-auto rounded-lg border">

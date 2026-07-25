@@ -41,7 +41,6 @@ describe("Feature: Classroom Sunday operations", () => {
       gradeName: "Grade 1",
       lessonPlanNumber: 1,
       academicYearName: "2025-2026",
-      docsDriveFolderId: "folder-123",
       driveConfigured: true,
     });
     expect(reasons.some((r) => r.includes("Grade 1"))).toBe(true);
@@ -57,5 +56,11 @@ describe("Feature: Classroom Sunday operations", () => {
 
   it("Scenario: Letter grade A for excellent performance", () => {
     expect(letterGrade(95)).toBe("A");
+  });
+
+  it("Scenario: Letter grade D for scores below passing threshold", () => {
+    expect(letterGrade(69.9)).toBe("D");
+    expect(letterGrade(0)).toBe("D");
+    expect(letterGrade(70)).toBe("C");
   });
 });

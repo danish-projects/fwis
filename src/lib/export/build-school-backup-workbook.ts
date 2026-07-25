@@ -4,11 +4,11 @@ import {
   ASSESSMENT_COLUMNS,
   ASSESSMENT_COLUMN_BY_TYPE,
   ATTENDANCE_COLUMNS,
+  BACKUP_STAFF_COLUMNS,
   CALENDAR_COLUMNS,
   SCHOOL_SETUP_COLUMNS,
   SHEET_NAMES,
   STUDENT_COLUMNS,
-  TEACHER_COLUMNS,
 } from "@/lib/import/sheet-spec";
 
 export type SchoolBackupRow = Record<string, string>;
@@ -21,7 +21,7 @@ export type SchoolYearBackupData = {
   yearStartDate: string;
   yearEndDate: string;
   exportedAt: string;
-  teachers: SchoolBackupRow[];
+  staff: SchoolBackupRow[];
   students: SchoolBackupRow[];
   attendance: SchoolBackupRow[];
   assessments: SchoolBackupRow[];
@@ -70,11 +70,12 @@ function backupInstructions(data: SchoolYearBackupData): string[] {
     `School: ${data.schoolName} (${data.city}, ${data.state})`,
     `Academic year: ${data.academicYear}`,
     "",
-    "This workbook matches the FWIS import template format.",
-    "Sheets: School_Setup, Teachers, Students, Attendance, Assessments, Calendar_Optional",
+    "This workbook is a full school-year backup (includes attendance / assessments / calendar).",
+    "Roster import template is Staff + Students only; school and year must already exist.",
+    "Sheets: School_Setup, Staff, Students, Attendance, Assessments, Calendar_Optional",
     "",
     "Student references use student_id (e.g. HOU-B1), not internal database IDs.",
-    "Re-import with: npm run import:school -- --file path/to/this-file.xlsx --dry-run",
+    "For roster re-import, use the Staff + Students template from Backup → Import template.",
   ];
 }
 
@@ -106,7 +107,7 @@ export async function buildSchoolBackupWorkbook(
     },
   ]);
 
-  addDataSheet(workbook, SHEET_NAMES.teachers, TEACHER_COLUMNS, data.teachers);
+  addDataSheet(workbook, SHEET_NAMES.staff, BACKUP_STAFF_COLUMNS, data.staff);
   addDataSheet(workbook, SHEET_NAMES.students, STUDENT_COLUMNS, data.students);
   addDataSheet(workbook, SHEET_NAMES.attendance, ATTENDANCE_COLUMNS, data.attendance);
   addDataSheet(workbook, SHEET_NAMES.assessments, ASSESSMENT_COLUMNS, data.assessments);

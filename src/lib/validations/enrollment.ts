@@ -6,7 +6,7 @@ export const enrollmentSchema = z.object({
   schoolId: z.string().uuid("Select a school"),
   academicYearId: z.string().uuid("Select an academic year"),
   classroomId: z.string().uuid("Select a classroom"),
-  teacherId: z.string().uuid().optional().or(z.literal("")),
+  staffId: z.string().uuid().optional().or(z.literal("")),
   enrollmentDate: z.string().optional(),
   status: z.enum(["ACTIVE", "WITHDRAWN", "GRADUATED", "PROMOTED"]).default("ACTIVE"),
 });

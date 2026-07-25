@@ -5,6 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { School } from "lucide-react";
 import { setSelectedSchool } from "@/actions/school-selection";
 import type { SchoolSummary } from "@/lib/school/constants";
+import { formatSchoolCityLabel } from "@/lib/school/format-school-code";
 import { cn } from "@/lib/utils";
 
 type SchoolSwitcherProps = {
@@ -59,7 +60,9 @@ export function SchoolSwitcher({
           <School className="h-3.5 w-3.5" />
           School
         </p>
-        <p className="text-sm font-semibold leading-snug">{schools[0].name}</p>
+        <p className="text-sm font-semibold leading-snug">
+          {formatSchoolCityLabel(schools[0])}
+        </p>
       </div>
     );
   }
@@ -78,7 +81,7 @@ export function SchoolSwitcher({
       >
         {schools.map((school) => (
           <option key={school.id} value={school.id}>
-            {school.name}
+            {formatSchoolCityLabel(school)}
           </option>
         ))}
       </select>

@@ -43,7 +43,7 @@ export default async function GradesPage({ searchParams }: PageProps) {
           <Button asChild>
             <Link href="/grades/new">
               <Plus className="h-4 w-4" />
-              Add Grade
+              Add Grades
             </Link>
           </Button>
         )}
@@ -76,7 +76,7 @@ export default async function GradesPage({ searchParams }: PageProps) {
                   <th className="pb-3 pr-4 font-medium">Level</th>
                   <th className="pb-3 pr-4 font-medium">Section</th>
                   <th className="pb-3 pr-4 font-medium">Students</th>
-                  <th className="pb-3 pr-4 font-medium">Teachers</th>
+                  <th className="pb-3 pr-4 font-medium">Staff</th>
                   <th className="pb-3 pr-4 font-medium">Status</th>
                   <th className="pb-3 font-medium">Actions</th>
                 </tr>
@@ -97,9 +97,9 @@ export default async function GradesPage({ searchParams }: PageProps) {
                     <td className="py-3 pr-4">{grade.section.name}</td>
                     <td className="py-3 pr-4">{grade._count.enrollments}</td>
                     <td className="py-3 pr-4 text-muted-foreground">
-                      {grade.teachers.length > 0
-                        ? grade.teachers
-                            .map((t) => `${t.teacher.firstName} ${t.teacher.lastName}`)
+                      {grade.staff.length > 0
+                        ? grade.staff
+                            .map((t) => `${t.staff.firstName} ${t.staff.lastName}`)
                             .join(", ")
                         : "—"}
                     </td>

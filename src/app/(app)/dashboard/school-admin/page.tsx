@@ -6,14 +6,14 @@ import { SundayAttendanceWidget } from "@/components/dashboard/sunday-attendance
 import { DashboardCalendarHighlights } from "@/components/dashboard/dashboard-calendar-highlights";
 import { StudentsByGradeCard } from "@/components/dashboard/students-by-grade-card";
 import { StudentsStatCard } from "@/components/dashboard/students-stat-card";
-import { TeachersStatCard } from "@/components/dashboard/teachers-stat-card";
+import { StaffStatCard } from "@/components/dashboard/staff-stat-card";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatPercent } from "@/lib/utils";
 
 export const metadata = { title: "School Admin Dashboard" };
 
 export default async function SchoolAdminDashboardPage() {
-  const user = await requireRole("SCHOOL_ADMIN");
+  const user = await requireRole("SCHOOL_ADMIN", "PRINCIPAL");
   const schoolId = user.schoolIds[0];
   const selectedYear = await getSelectedAcademicYear(user);
   const schoolYear = schoolId
@@ -36,13 +36,13 @@ export default async function SchoolAdminDashboardPage() {
     ...sectionScope,
   };
 
-  const teacherWhere = {
+  const staffWhere = {
     ...(schoolId ? { schoolId } : {}),
     deletedAt: null,
     isActive: true,
   };
 
-  const [studentCount, boyCount, girlCount, teacherCount, maleTeacherCount, femaleTeacherCount, enrollments] =
+  const [studentCount, boyCount, girlCount, staffCount, maleStaffCount, femaleStaffCount, enrollments] =
     await Promise.all([
     prisma.studentEnrollment.count({
       where: enrollmentWhere,
@@ -53,9 +53,9 @@ export default async function SchoolAdminDashboardPage() {
     prisma.studentEnrollment.count({
       where: { ...enrollmentWhere, student: { gender: "FEMALE" } },
     }),
-    prisma.teacher.count({ where: teacherWhere }),
-    prisma.teacher.count({ where: { ...teacherWhere, gender: "MALE" } }),
-    prisma.teacher.count({ where: { ...teacherWhere, gender: "FEMALE" } }),
+    prisma.staff.count({ where: staffWhere }),
+    prisma.staff.count({ where: { ...staffWhere, gender: "MALE" } }),
+    prisma.staff.count({ where: { ...staffWhere, gender: "FEMALE" } }),
     prisma.studentEnrollment.findMany({
       where: enrollmentWhere,
       include: {
@@ -118,10 +118,10 @@ export default async function SchoolAdminDashboardPage() {
           boys={boyCount}
           girls={girlCount}
         />
-        <TeachersStatCard
-          total={teacherCount}
-          male={maleTeacherCount}
-          female={femaleTeacherCount}
+        <StaffStatCard
+          total={staffCount}
+          male={maleStaffCount}
+          female={femaleStaffCount}
         />
         {[
           { label: "Attendance", value: formatPercent(90) },

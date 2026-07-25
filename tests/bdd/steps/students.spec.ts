@@ -26,14 +26,14 @@ describe("Feature: Students and enrollments", () => {
   });
 
   it("Scenario: Super admin enrollment list filters by school", () => {
-    const where = buildEnrollmentListFilter(mockUser(["SUPER_ADMIN"]), {
+    const where = buildEnrollmentListFilter(mockUser(["NIGRA"]), {
       schoolId: IDS.schoolHou,
     });
     expect(where).toMatchObject({ schoolId: IDS.schoolHou });
   });
 
   it("Scenario: Super admin student list respects selected school", () => {
-    const where = buildStudentListFilter(mockUser(["SUPER_ADMIN"]), {
+    const where = buildStudentListFilter(mockUser(["NIGRA"]), {
       listSchoolId: IDS.schoolHou,
     });
     expect(where).toMatchObject({
@@ -52,7 +52,7 @@ describe("Feature: Students and enrollments", () => {
   });
 
   it("Scenario: Student name search is combined with school scope", () => {
-    const where = buildStudentListFilter(mockUser(["SUPER_ADMIN"]), {
+    const where = buildStudentListFilter(mockUser(["NIGRA"]), {
       listSchoolId: IDS.schoolHou,
       search: "Ali",
     });
@@ -79,7 +79,7 @@ describe("Feature: Students and enrollments", () => {
   });
 
   it("Scenario: Super admin enrollment list filters by classroom", () => {
-    const where = buildEnrollmentListFilter(mockUser(["SUPER_ADMIN"]), {
+    const where = buildEnrollmentListFilter(mockUser(["NIGRA"]), {
       schoolId: IDS.schoolHou,
       classroomId: IDS.classroomG1Boys,
     });
@@ -87,7 +87,7 @@ describe("Feature: Students and enrollments", () => {
   });
 
   it("Scenario: Enrollment list respects academic year school link", () => {
-    const where = buildEnrollmentListFilter(mockUser(["SUPER_ADMIN"]), {
+    const where = buildEnrollmentListFilter(mockUser(["NIGRA"]), {
       academicYearSchoolId: IDS.yearSchoolHou,
     });
     expect(where).toMatchObject({ academicYearSchoolId: IDS.yearSchoolHou });

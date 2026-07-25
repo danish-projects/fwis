@@ -19,7 +19,7 @@ export async function loadGradingScaleForPage() {
 }
 
 export async function updateGradingScale(input: GradingScaleConfig) {
-  const user = await requireRole("SUPER_ADMIN");
+  const user = await requireRole("NIGRA");
 
   const error = validateGradingScale(input);
   if (error) throw new Error(error);

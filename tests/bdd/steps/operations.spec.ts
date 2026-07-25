@@ -20,13 +20,20 @@ describe("Feature: Core operations", () => {
     const classrooms = [
       { id: "c1", schoolId: IDS.schoolHou, name: "G1 Boys" },
       { id: "c2", schoolId: IDS.schoolChi, name: "G1 Girls" },
+      {
+        id: "c3",
+        name: "G2 Boys",
+        schoolLinks: [{ schoolId: IDS.schoolHou }],
+      },
     ];
     const filtered = filterClassroomsForSelectedSchool(classrooms, {
       id: IDS.schoolHou,
       name: MOCK_SCHOOLS.houston.name,
+      code: MOCK_SCHOOLS.houston.code,
+      city: MOCK_SCHOOLS.houston.city,
     });
-    expect(filtered).toHaveLength(1);
-    expect(filtered[0].schoolId).toBe(IDS.schoolHou);
+    expect(filtered).toHaveLength(2);
+    expect(filtered.map((c) => c.id).sort()).toEqual(["c1", "c3"]);
   });
 
   it("Scenario: Valid academic year create payload passes", () => {
@@ -50,13 +57,18 @@ describe("Feature: Core operations", () => {
   it("Scenario: School admin can access assigned school only", () => {
     const admin = mockUser(["SCHOOL_ADMIN"], { schoolIds: [IDS.schoolHou] });
     const canAccess = (schoolId: string) =>
-      admin.roles.includes("SUPER_ADMIN") || admin.schoolIds.includes(schoolId);
+      admin.roles.includes("NIGRA") || admin.schoolIds.includes(schoolId);
     expect(canAccess(IDS.schoolHou)).toBe(true);
     expect(canAccess(IDS.schoolChi)).toBe(false);
   });
 
   it("Scenario: Teachers may only reach teacher routes", () => {
     expect(isTeacherRouteAllowed("/teacher/attendance")).toBe(true);
+    expect(isTeacherRouteAllowed("/teacher/transcript")).toBe(true);
+    expect(
+      isTeacherRouteAllowed("/students/00000000-0000-4000-8000-000000000001/profile")
+    ).toBe(true);
+    expect(isTeacherRouteAllowed("/students")).toBe(false);
     expect(isTeacherRouteAllowed("/schools")).toBe(false);
   });
 

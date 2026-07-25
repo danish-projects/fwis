@@ -35,3 +35,13 @@ export function getGoogleDriveServiceAccount(): GoogleDriveServiceAccount | null
 export function isGoogleDriveConfigured(): boolean {
   return getGoogleDriveServiceAccount() !== null;
 }
+
+/** Parent FWIS Docs folder that contains one subfolder per academic year name. */
+export function getFwisDocsParentFolderId(): string | null {
+  const value = process.env.GOOGLE_DRIVE_FWIS_DOCS_FOLDER_ID?.trim();
+  return value || null;
+}
+
+export function isLessonPlanDriveConfigured(): boolean {
+  return isGoogleDriveConfigured() && Boolean(getFwisDocsParentFolderId());
+}

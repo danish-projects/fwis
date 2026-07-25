@@ -41,7 +41,9 @@ export default async function UsersPage({ searchParams }: PageProps) {
 
   const params = await searchParams;
   const page = Number(params.page) || 1;
-  const role = params.role as UserRoleCode | undefined;
+  const role = (params.role || undefined) as UserRoleCode | undefined;
+  const schoolId = params.schoolId || undefined;
+  const search = params.search || undefined;
   const isActive =
     params.isActive === "true"
       ? true
@@ -52,19 +54,19 @@ export default async function UsersPage({ searchParams }: PageProps) {
   const [{ data: users, meta }, { roles, schools }] = await Promise.all([
     getUsers({
       page,
-      search: params.search,
+      search,
       role,
-      schoolId: params.schoolId,
+      schoolId,
       isActive,
     }),
     getUserFormOptions(),
   ]);
 
   const queryBase = {
-    search: params.search,
-    role: params.role,
-    schoolId: params.schoolId,
-    isActive: params.isActive,
+    search,
+    role,
+    schoolId,
+    isActive: params.isActive || undefined,
   };
 
   const showSchoolFilter = schools.length > 1;
@@ -90,12 +92,12 @@ export default async function UsersPage({ searchParams }: PageProps) {
 
       <Card>
         <CardHeader>
-          <form className="flex flex-col gap-3 lg:flex-row">
+          <form method="get" className="flex flex-col gap-3 lg:flex-row">
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <Input
                 name="search"
-                placeholder="Search name or email..."
+                placeholder="Search name or user id..."
                 defaultValue={params.search}
                 className="pl-9"
               />
@@ -146,7 +148,7 @@ export default async function UsersPage({ searchParams }: PageProps) {
               <thead>
                 <tr className="border-b text-left text-muted-foreground">
                   <th className="pb-3 pr-4 font-medium">Name</th>
-                  <th className="pb-3 pr-4 font-medium">Email</th>
+                  <th className="pb-3 pr-4 font-medium">User ID</th>
                   <th className="pb-3 pr-4 font-medium">Roles</th>
                   <th className="pb-3 pr-4 font-medium">Schools</th>
                   <th className="pb-3 pr-4 font-medium">Status</th>
@@ -164,7 +166,7 @@ export default async function UsersPage({ searchParams }: PageProps) {
                         {appUser.fullName ?? "—"}
                       </Link>
                     </td>
-                    <td className="py-3 pr-4">{appUser.email}</td>
+                    <td className="py-3 pr-4">{appUser.userId}</td>
                     <td className="py-3 pr-4 text-muted-foreground">
                       {appUser.roles.map((r) => r.role.name).join(", ") || "—"}
                     </td>

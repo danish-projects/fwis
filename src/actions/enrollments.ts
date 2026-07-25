@@ -13,7 +13,7 @@ import {
 import { buildEnrollmentEligibleStudentFilter } from "@/lib/auth/student-access";
 import {
   buildClassroomListWhere,
-  buildTeacherScopeWhere,
+  buildStaffScopeWhere,
   isClassroomScopedUser,
 } from "@/lib/auth/section-scope";
 import {
@@ -27,6 +27,7 @@ import {
 } from "@/lib/academic-year/resolve-year";
 import { resolveListSchoolId } from "@/lib/school/resolve-school";
 import { ensureStudentNumber } from "@/lib/students/student-number";
+import { classroomBelongsToSchool } from "@/lib/classrooms/ensure-classroom-for-school";
 
 async function resolveAcademicYearSchoolId(
   schoolId: string,
@@ -53,7 +54,7 @@ function parseEnrollmentData(data: EnrollmentInput) {
     schoolId: parsed.schoolId,
     academicYearId: parsed.academicYearId,
     classroomId: parsed.classroomId,
-    teacherId: parsed.teacherId || null,
+    staffId: parsed.staffId || null,
     enrollmentDate: parsed.enrollmentDate
       ? new Date(parsed.enrollmentDate)
       : new Date(),
@@ -69,14 +70,16 @@ async function validateEnrollmentScope(
     if (!user.classroomIds.includes(data.classroomId)) {
       throw new Error("You can only enroll students in your assigned grades");
     }
-  } else if (!user.roles.includes("SUPER_ADMIN") && !user.schoolIds.includes(data.schoolId)) {
+  } else if (!user.roles.includes("NIGRA") && !user.schoolIds.includes(data.schoolId)) {
     throw new Error("Unauthorized school access");
   }
 
-  const classroom = await prisma.classroom.findFirst({
-    where: { id: data.classroomId, schoolId: data.schoolId, deletedAt: null },
-  });
-  if (!classroom) throw new Error("Classroom does not belong to selected school");
+  const belongs = await classroomBelongsToSchool(
+    prisma,
+    data.classroomId,
+    data.schoolId
+  );
+  if (!belongs) throw new Error("Classroom does not belong to selected school");
 
   const year = await prisma.academicYear.findFirst({
     where: { id: data.academicYearId, deletedAt: null },
@@ -115,7 +118,7 @@ export async function createEnrollment(data: EnrollmentInput) {
         schoolId: enrollmentData.schoolId,
         academicYearSchoolId,
         classroomId: enrollmentData.classroomId,
-        teacherId: enrollmentData.teacherId,
+        staffId: enrollmentData.staffId,
         enrollmentDate: enrollmentData.enrollmentDate,
         status: enrollmentData.status,
       },
@@ -159,7 +162,7 @@ export async function updateEnrollment(id: string, data: EnrollmentInput) {
       schoolId: enrollmentData.schoolId,
       academicYearSchoolId,
       classroomId: enrollmentData.classroomId,
-      teacherId: enrollmentData.teacherId,
+      staffId: enrollmentData.staffId,
       enrollmentDate: enrollmentData.enrollmentDate,
       status: enrollmentData.status,
     },
@@ -187,7 +190,7 @@ export async function getEligibleStudentsForEnrollment(
 ) {
   const user = await requirePermission("enrollments:read");
 
-  if (!user.roles.includes("SUPER_ADMIN") && !user.schoolIds.includes(schoolId)) {
+  if (!user.roles.includes("NIGRA") && !user.schoolIds.includes(schoolId)) {
     throw new Error("Unauthorized school access");
   }
 
@@ -317,7 +320,7 @@ export async function getEnrollments(rawParams: {
         school: true,
         academicYearSchool: { include: { academicYear: true } },
         classroom: { include: { grade: true, section: true } },
-        teacher: { select: { firstName: true, lastName: true } },
+        staff: { select: { firstName: true, lastName: true } },
         finalGrade: true,
       },
     }),
@@ -348,7 +351,7 @@ export async function getEnrollmentById(id: string) {
       school: true,
       academicYearSchool: { include: { academicYear: true } },
       classroom: { include: { grade: true, section: true } },
-      teacher: true,
+      staff: true,
       finalGrade: true,
       assessments: { where: { deletedAt: null } },
       attendance: {
@@ -364,10 +367,11 @@ export async function getEnrollmentById(id: string) {
 export async function getEnrollmentFormOptions() {
   const user = await requirePermission("enrollments:read");
   const listSchoolId = await resolveListSchoolId(user);
+  const selectedYear = await getSelectedAcademicYear(user);
 
   const schoolFilter = listSchoolId
     ? { id: listSchoolId, deletedAt: null, isActive: true }
-    : user.roles.includes("SUPER_ADMIN")
+    : user.roles.includes("NIGRA")
       ? { id: "00000000-0000-0000-0000-000000000000", deletedAt: null }
       : { id: { in: user.schoolIds }, deletedAt: null, isActive: true };
 
@@ -378,7 +382,23 @@ export async function getEnrollmentFormOptions() {
       : { schoolId: "00000000-0000-0000-0000-000000000000" }
   );
 
-  const [schools, classrooms, yearLinks, teachers] = await Promise.all([
+  const schoolIdsForYear =
+    listSchoolId != null
+      ? [listSchoolId]
+      : user.roles.includes("NIGRA")
+        ? []
+        : user.schoolIds;
+  const yearSchoolIds = (
+    await Promise.all(
+      schoolIdsForYear.map((schoolId) =>
+        resolveAcademicYearSchoolForSchool(schoolId, selectedYear)
+      )
+    )
+  )
+    .filter(Boolean)
+    .map((link) => link!.id);
+
+  const [schools, classrooms, yearLinks, staffMembers] = await Promise.all([
     prisma.school.findMany({
       where: schoolFilter,
       orderBy: { name: "asc" },
@@ -387,7 +407,16 @@ export async function getEnrollmentFormOptions() {
     prisma.classroom.findMany({
       where: classroomFilter,
       orderBy: { name: "asc" },
-      include: { grade: true, section: true, school: { select: { name: true } } },
+      include: {
+        grade: true,
+        section: true,
+        schoolLinks: {
+          where: listSchoolId
+            ? { schoolId: listSchoolId, deletedAt: null }
+            : { deletedAt: null },
+          select: { schoolId: true },
+        },
+      },
     }),
     prisma.academicYearSchool.findMany({
       where: listSchoolId
@@ -396,7 +425,7 @@ export async function getEnrollmentFormOptions() {
             deletedAt: null,
             academicYear: { deletedAt: null },
           }
-        : user.roles.includes("SUPER_ADMIN")
+        : user.roles.includes("NIGRA")
           ? { id: "00000000-0000-0000-0000-000000000000" }
           : {
               schoolId: { in: user.schoolIds },
@@ -409,8 +438,8 @@ export async function getEnrollmentFormOptions() {
         school: { select: { id: true, name: true } },
       },
     }),
-    prisma.teacher.findMany({
-      where: buildTeacherScopeWhere(user, {
+    prisma.staff.findMany({
+      where: buildStaffScopeWhere(user, {
         isActive: true,
         ...(listSchoolId ? { schoolId: listSchoolId } : {}),
       }),
@@ -420,7 +449,13 @@ export async function getEnrollmentFormOptions() {
         firstName: true,
         lastName: true,
         schoolId: true,
-        classrooms: { select: { classroomId: true } },
+        assignments: {
+          where:
+            yearSchoolIds.length > 0
+              ? { academicYearSchoolId: { in: yearSchoolIds } }
+              : { id: "00000000-0000-0000-0000-000000000000" },
+          select: { classroomId: true },
+        },
       },
     }),
   ]);
@@ -444,7 +479,7 @@ export async function getEnrollmentFormOptions() {
     classrooms: classrooms.map((c) => ({
       id: c.id,
       name: c.name,
-      schoolId: c.schoolId,
+      schoolId: c.schoolLinks[0]?.schoolId ?? listSchoolId ?? "",
       label: c.name,
     })),
     academicYears: yearLinks.map((link) => ({
@@ -455,12 +490,12 @@ export async function getEnrollmentFormOptions() {
       isActive: link.isActive,
     })),
     globalAcademicYears: [...globalYears.values()],
-    teachers: teachers.map((teacher) => ({
-      id: teacher.id,
-      firstName: teacher.firstName,
-      lastName: teacher.lastName,
-      schoolId: teacher.schoolId,
-      classroomId: teacher.classrooms[0]?.classroomId ?? null,
+    staff: staffMembers.map((staff) => ({
+      id: staff.id,
+      firstName: staff.firstName,
+      lastName: staff.lastName,
+      schoolId: staff.schoolId,
+      classroomId: staff.assignments[0]?.classroomId ?? null,
     })),
   };
 }
@@ -475,7 +510,16 @@ export async function getClassroomsForAssessment() {
     where,
     orderBy: { name: "asc" },
     include: {
-      school: { select: { name: true } },
+      schoolLinks: {
+        where: {
+          deletedAt: null,
+          isActive: true,
+          ...(user.roles.includes("NIGRA")
+            ? {}
+            : { schoolId: { in: user.schoolIds } }),
+        },
+        include: { school: { select: { name: true } } },
+      },
       grade: true,
       section: true,
       _count: {
@@ -486,9 +530,21 @@ export async function getClassroomsForAssessment() {
     },
   });
 
-  if (classrooms.length === 0) return classrooms;
+  if (classrooms.length === 0) return [];
 
-  const schoolIds = [...new Set(classrooms.map((c) => c.schoolId))];
+  const mapped = classrooms.flatMap((c) => {
+    if (c.schoolLinks.length === 0) return [];
+    return c.schoolLinks.map((link) => ({
+      ...c,
+      schoolId: link.schoolId,
+      school: link.school,
+      schoolLinks: c.schoolLinks.map((l) => ({ schoolId: l.schoolId })),
+    }));
+  });
+
+  if (mapped.length === 0) return [];
+
+  const schoolIds = [...new Set(mapped.map((c) => c.schoolId).filter(Boolean))];
   const yearBySchool = new Map<string, string>();
   for (const schoolId of schoolIds) {
     const year = await resolveAcademicYearSchoolForSchool(schoolId, selectedYear);
@@ -496,20 +552,36 @@ export async function getClassroomsForAssessment() {
   }
 
   const yearSchoolIds = [...new Set(yearBySchool.values())];
+  if (yearSchoolIds.length === 0) {
+    return mapped.map((c) => ({
+      ...c,
+      _count: { enrollments: 0 },
+    }));
+  }
+
   const counts = await prisma.studentEnrollment.groupBy({
-    by: ["classroomId"],
+    by: ["classroomId", "academicYearSchoolId"],
     where: {
-      classroomId: { in: classrooms.map((c) => c.id) },
+      classroomId: { in: [...new Set(mapped.map((c) => c.id))] },
       academicYearSchoolId: { in: yearSchoolIds },
       deletedAt: null,
       status: "ACTIVE",
     },
     _count: { _all: true },
   });
-  const countMap = new Map(counts.map((c) => [c.classroomId, c._count._all]));
 
-  return classrooms.map((c) => ({
-    ...c,
-    _count: { enrollments: countMap.get(c.id) ?? 0 },
-  }));
+  const countMap = new Map(
+    counts.map((c) => [`${c.classroomId}:${c.academicYearSchoolId}`, c._count._all])
+  );
+
+  return mapped.map((c) => {
+    const yearSchoolId = yearBySchool.get(c.schoolId);
+    const enrollments = yearSchoolId
+      ? (countMap.get(`${c.id}:${yearSchoolId}`) ?? 0)
+      : 0;
+    return {
+      ...c,
+      _count: { enrollments },
+    };
+  });
 }

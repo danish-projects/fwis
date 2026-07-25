@@ -83,7 +83,7 @@ Usage:
   npm run db:delete-schools -- --id <school-uuid> [--id <school-uuid>] [--yes]
 
 Deletes each school and all related data:
-  enrollments, attendance, assessments, final grades, teachers, classrooms,
+  enrollments, attendance, assessments, final grades, staff, classrooms,
   academic years, calendar days, audit logs, user-school links, and orphan students.
 
 Default targets (no --id):
@@ -171,15 +171,15 @@ async function resolveTargets(explicitIds: string[]): Promise<ResolvedSchool[]> 
 async function previewSchool(school: ResolvedSchool) {
   const [
     enrollments,
-    teachers,
+    staffCount,
     classrooms,
     academicYears,
     userSchools,
   ] = await Promise.all([
     prisma.studentEnrollment.count({ where: { schoolId: school.id } }),
-    prisma.teacher.count({ where: { schoolId: school.id } }),
-    prisma.classroom.count({ where: { schoolId: school.id } }),
-    prisma.academicYear.count({ where: { schoolId: school.id } }),
+    prisma.staff.count({ where: { schoolId: school.id } }),
+    prisma.classroomSchool.count({ where: { schoolId: school.id } }),
+    prisma.academicYearSchool.count({ where: { schoolId: school.id } }),
     prisma.userSchool.count({ where: { schoolId: school.id } }),
   ]);
 
@@ -188,7 +188,7 @@ async function previewSchool(school: ResolvedSchool) {
   console.log(`    Name:     ${school.name}`);
   console.log(`    Location: ${school.city}, ${school.state} (${school.cityCode})`);
   console.log(
-    `    Records:  ${enrollments} enrollments, ${teachers} teachers, ${classrooms} classrooms, ${academicYears} years, ${userSchools} user links`
+    `    Records:  ${enrollments} enrollments, ${staffCount} staff, ${classrooms} classrooms, ${academicYears} years, ${userSchools} user links`
   );
 }
 

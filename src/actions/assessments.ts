@@ -20,6 +20,8 @@ import { calculateFinalPercentage, letterGrade } from "@/lib/grades/calculate-fi
 import { BehaviorCalculationService } from "@/lib/behavior";
 import { getGradingScale } from "@/lib/grades/get-grading-scale";
 import { getSelectedAcademicYear, resolveAcademicYearForSchool } from "@/lib/academic-year/resolve-year";
+import { pickSchoolLink } from "@/lib/classrooms/ensure-classroom-for-school";
+import { getSelectedSchool } from "@/lib/school/resolve-school";
 import {
   buildAssessmentColumnDates,
   type AssessmentColumnDates,
@@ -51,17 +53,43 @@ async function getScoreMatrix(classroomId: string, globalYearId?: string) {
     throw new Error("Unauthorized classroom access");
   }
 
-  const classroom = await prisma.classroom.findFirst({
-    where: { id: classroomId, deletedAt: null },
-    include: { school: true, grade: true, section: true },
-  });
+  const [classroom, selectedSchool] = await Promise.all([
+    prisma.classroom.findFirst({
+      where: { id: classroomId, deletedAt: null },
+      include: {
+        schoolLinks: {
+          where: { deletedAt: null, isActive: true },
+          include: { school: true },
+        },
+        grade: true,
+        section: true,
+      },
+    }),
+    getSelectedSchool(user),
+  ]);
   if (!classroom) return null;
+
+  const preferredSchoolIds = [
+    ...(selectedSchool ? [selectedSchool.id] : []),
+    ...user.schoolIds,
+  ];
+  const classroomSchoolLink = pickSchoolLink(
+    classroom.schoolLinks,
+    preferredSchoolIds
+  );
+  if (!classroomSchoolLink) return null;
+
+  const classroomWithSchool = {
+    ...classroom,
+    schoolId: classroomSchoolLink.schoolId,
+    school: classroomSchoolLink.school,
+  };
 
   let schoolYearId: string | undefined;
   if (globalYearId) {
     const link = await prisma.academicYearSchool.findFirst({
       where: {
-        schoolId: classroom.schoolId,
+        schoolId: classroomSchoolLink.schoolId,
         academicYearId: globalYearId,
         deletedAt: null,
       },
@@ -71,14 +99,14 @@ async function getScoreMatrix(classroomId: string, globalYearId?: string) {
   } else {
     const selectedYear = await getSelectedAcademicYear(user);
     const schoolYear = await resolveAcademicYearForSchool(
-      classroom.schoolId,
+      classroomSchoolLink.schoolId,
       selectedYear
     );
     schoolYearId = schoolYear?.id;
   }
   if (!schoolYearId) {
     return {
-      classroom,
+      classroom: classroomWithSchool,
       academicYear: null,
       rows: [] as ScoreMatrixRow[],
       columnDates: {} as AssessmentColumnDates,
@@ -99,7 +127,13 @@ async function getScoreMatrix(classroomId: string, globalYearId?: string) {
       },
       include: {
         student: {
-          select: { firstName: true, lastName: true, gender: true, studentNumber: true },
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            gender: true,
+            studentNumber: true,
+          },
         },
         assessments: {
           where: { deletedAt: null },
@@ -120,6 +154,7 @@ async function getScoreMatrix(classroomId: string, globalYearId?: string) {
     }
     return {
       enrollmentId: e.id,
+      studentId: e.student.id,
       studentName: `${e.student.firstName} ${e.student.lastName}`,
       studentNumber: e.student.studentNumber,
       gender: e.student.gender,
@@ -127,7 +162,7 @@ async function getScoreMatrix(classroomId: string, globalYearId?: string) {
     };
   });
 
-  return { classroom, academicYear, rows, columnDates };
+  return { classroom: classroomWithSchool, academicYear, rows, columnDates };
 }
 
 export async function getAssessmentMatrix(classroomId: string, academicYearId?: string) {
@@ -140,17 +175,43 @@ export async function getTranscriptMatrix(classroomId: string, academicYearId?: 
     throw new Error("Unauthorized classroom access");
   }
 
-  const classroom = await prisma.classroom.findFirst({
-    where: { id: classroomId, deletedAt: null },
-    include: { school: true, grade: true, section: true },
-  });
+  const [classroom, selectedSchool] = await Promise.all([
+    prisma.classroom.findFirst({
+      where: { id: classroomId, deletedAt: null },
+      include: {
+        schoolLinks: {
+          where: { deletedAt: null, isActive: true },
+          include: { school: true },
+        },
+        grade: true,
+        section: true,
+      },
+    }),
+    getSelectedSchool(user),
+  ]);
   if (!classroom) return null;
+
+  const preferredSchoolIds = [
+    ...(selectedSchool ? [selectedSchool.id] : []),
+    ...user.schoolIds,
+  ];
+  const classroomSchoolLink = pickSchoolLink(
+    classroom.schoolLinks,
+    preferredSchoolIds
+  );
+  if (!classroomSchoolLink) return null;
+
+  const classroomWithSchool = {
+    ...classroom,
+    schoolId: classroomSchoolLink.schoolId,
+    school: classroomSchoolLink.school,
+  };
 
   let schoolYearId: string | undefined;
   if (academicYearId) {
     const link = await prisma.academicYearSchool.findFirst({
       where: {
-        schoolId: classroom.schoolId,
+        schoolId: classroomSchoolLink.schoolId,
         academicYearId,
         deletedAt: null,
       },
@@ -160,14 +221,14 @@ export async function getTranscriptMatrix(classroomId: string, academicYearId?: 
   } else {
     const selectedYear = await getSelectedAcademicYear(user);
     const schoolYear = await resolveAcademicYearForSchool(
-      classroom.schoolId,
+      classroomSchoolLink.schoolId,
       selectedYear
     );
     schoolYearId = schoolYear?.id;
   }
   if (!schoolYearId) {
     return {
-      classroom,
+      classroom: classroomWithSchool,
       academicYear: null,
       rows: [] as TranscriptMatrixRow[],
       gradingScale: await getGradingScale(),
@@ -190,7 +251,13 @@ export async function getTranscriptMatrix(classroomId: string, academicYearId?: 
       },
       include: {
         student: {
-          select: { firstName: true, lastName: true, gender: true, studentNumber: true },
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            gender: true,
+            studentNumber: true,
+          },
         },
         assessments: {
           where: { deletedAt: null },
@@ -278,6 +345,7 @@ export async function getTranscriptMatrix(classroomId: string, academicYearId?: 
 
     return {
       enrollmentId: e.id,
+      studentId: e.student.id,
       studentName: `${e.student.firstName} ${e.student.lastName}`,
       studentNumber: e.student.studentNumber,
       gender: e.student.gender,
@@ -296,7 +364,7 @@ export async function getTranscriptMatrix(classroomId: string, academicYearId?: 
     };
   });
 
-  return { classroom, academicYear, rows, gradingScale, columnDates };
+  return { classroom: classroomWithSchool, academicYear, rows, gradingScale, columnDates };
 }
 
 export async function upsertAssessmentScore(data: AssessmentScoreInput) {
@@ -412,13 +480,32 @@ export async function getAcademicYearsForClassroom(classroomId: string) {
     throw new Error("Unauthorized");
   }
 
-  const classroom = await prisma.classroom.findUnique({
-    where: { id: classroomId },
-  });
+  const [classroom, selectedSchool] = await Promise.all([
+    prisma.classroom.findFirst({
+      where: { id: classroomId, deletedAt: null },
+      select: {
+        schoolLinks: {
+          where: { deletedAt: null, isActive: true },
+          select: { schoolId: true },
+        },
+      },
+    }),
+    getSelectedSchool(user),
+  ]);
   if (!classroom) return [];
 
+  const preferredSchoolIds = [
+    ...(selectedSchool ? [selectedSchool.id] : []),
+    ...user.schoolIds,
+  ];
+  const classroomSchoolLink = pickSchoolLink(
+    classroom.schoolLinks,
+    preferredSchoolIds
+  );
+  if (!classroomSchoolLink) return [];
+
   return prisma.academicYearSchool.findMany({
-    where: { schoolId: classroom.schoolId, deletedAt: null },
+    where: { schoolId: classroomSchoolLink.schoolId, deletedAt: null },
     orderBy: { academicYear: { startDate: "desc" } },
     include: { academicYear: true },
   }).then((links) => links.map((link) => link.academicYear));

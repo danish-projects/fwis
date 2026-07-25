@@ -27,6 +27,27 @@ export async function seedLookupTables(prisma: PrismaClient) {
     });
   }
 
+  const grades = await prisma.grade.findMany({ orderBy: { sortOrder: "asc" } });
+  const sections = await prisma.section.findMany({ orderBy: { name: "asc" } });
+  for (const grade of grades) {
+    for (const section of sections) {
+      await prisma.classroom.upsert({
+        where: {
+          gradeId_sectionId: {
+            gradeId: grade.id,
+            sectionId: section.id,
+          },
+        },
+        update: {},
+        create: {
+          gradeId: grade.id,
+          sectionId: section.id,
+          name: `${grade.name} ${section.name}`,
+        },
+      });
+    }
+  }
+
   for (const row of GENDER_ROWS) {
     await prisma.gender.upsert({
       where: { code: row.code },

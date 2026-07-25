@@ -59,19 +59,19 @@ export default async function GradeDetailPage({ params }: PageProps) {
 
       <Card>
         <CardHeader>
-          <CardTitle>Assigned Teachers</CardTitle>
+          <CardTitle>Assigned Staff</CardTitle>
         </CardHeader>
         <CardContent>
-          {grade.teachers.length === 0 ? (
-            <p className="text-muted-foreground">No teachers assigned.</p>
+          {grade.staff.length === 0 ? (
+            <p className="text-muted-foreground">No staff assigned.</p>
           ) : (
             <ul className="space-y-2">
-              {grade.teachers.map(({ teacher }) => (
-                <li key={teacher.id} className="text-sm">
-                  <Link href={`/teachers/${teacher.id}`} className="hover:underline">
-                    {teacher.firstName} {teacher.lastName}
+              {grade.staff.map(({ staff }) => (
+                <li key={staff.id} className="text-sm">
+                  <Link href={`/staff/${staff.id}`} className="hover:underline">
+                    {staff.firstName} {staff.lastName}
                   </Link>
-                  <span className="text-muted-foreground"> · {teacher.email}</span>
+                  <span className="text-muted-foreground"> · {staff.email}</span>
                 </li>
               ))}
             </ul>

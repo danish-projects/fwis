@@ -469,8 +469,23 @@ node server.js
         <remove name="X-Powered-By" />
       </customHeaders>
     </httpProtocol>
+    <!-- Ensure JS/CSS MIME types if IIS StaticFile answers before Node (avoids text/plain). -->
+    <staticContent>
+      <remove fileExtension=".js" />
+      <remove fileExtension=".mjs" />
+      <remove fileExtension=".css" />
+      <remove fileExtension=".json" />
+      <remove fileExtension=".woff" />
+      <remove fileExtension=".woff2" />
+      <mimeMap fileExtension=".js" mimeType="application/javascript" />
+      <mimeMap fileExtension=".mjs" mimeType="application/javascript" />
+      <mimeMap fileExtension=".css" mimeType="text/css" />
+      <mimeMap fileExtension=".json" mimeType="application/json" />
+      <mimeMap fileExtension=".woff" mimeType="font/woff" />
+      <mimeMap fileExtension=".woff2" mimeType="font/woff2" />
+    </staticContent>
     <handlers>
-      <add name="httpPlatformHandler" path="*" verb="*" modules="httpPlatformHandler" />
+      <add name="httpPlatformHandler" path="*" verb="*" modules="httpPlatformHandler" resourceType="Unspecified" />
     </handlers>
     <httpPlatform
       processPath="node"
@@ -485,9 +500,7 @@ node server.js
         <!-- Add production secrets here (or use a .env file — see web.config.env.example): -->
         <!-- <environmentVariable name="DATABASE_URL" value="..." /> -->
         <!-- <environmentVariable name="DIRECT_URL" value="..." /> -->
-        <!-- <environmentVariable name="NEXT_PUBLIC_SUPABASE_URL" value="..." /> -->
-        <!-- <environmentVariable name="NEXT_PUBLIC_SUPABASE_ANON_KEY" value="..." /> -->
-        <!-- <environmentVariable name="SUPABASE_SERVICE_ROLE_KEY" value="..." /> -->
+        <!-- <environmentVariable name="AUTH_SESSION_SECRET" value="..." /> -->
         <!-- <environmentVariable name="NEXT_PUBLIC_APP_URL" value="https://fwis-stage.codewithraza.com" /> -->
         <!-- <environmentVariable name="PII_ENCRYPTION_KEY" value="..." /> -->
       </environmentVariables>
@@ -506,11 +519,9 @@ node server.js
 # IMPORTANT: NEXT_PUBLIC_* vars are baked in at build time from .env.<env> on your PC
 # (e.g. .env.stage, .env.prod) before running npm run build:hosting -- <env>.
 
-DATABASE_URL=postgresql://...pooler...
-DIRECT_URL=postgresql://...direct...
-NEXT_PUBLIC_SUPABASE_URL=https://xxxx.supabase.co
-NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJ...
-SUPABASE_SERVICE_ROLE_KEY=eyJ...
+DATABASE_URL=postgresql://USER:PASSWORD@PGxxxx.site4now.net:6432/db_xxxxx_fwis?sslmode=require
+DIRECT_URL=postgresql://USER:PASSWORD@PGxxxx.site4now.net:6432/db_xxxxx_fwis?sslmode=require
+AUTH_SESSION_SECRET=base64-32-byte-secret
 # Must be https:// for Secure cookies and HSTS-related app behavior
 NEXT_PUBLIC_APP_URL=https://fwis-stage.codewithraza.com
 PII_ENCRYPTION_KEY=base64-32-byte-key
@@ -532,7 +543,7 @@ Upload the entire \`${outputFolderName}\` directory to your server.
 ## Requirements
 
 - **Node.js 20+** (18 LTS minimum)
-- **PostgreSQL** database (Supabase recommended — already used by this project)
+- **PostgreSQL** database (SmarterASP.NET recommended — already used by this project)
 - Shared host must support **long-running Node.js apps** (cPanel Node.js Selector, Passenger, PM2, etc.)
 - This is **not** a static HTML site — PHP-only hosting will not work.
 
@@ -567,11 +578,9 @@ Runtime config lives in **\`.env\`** in this folder (no separate example file is
 
 | Variable | Purpose |
 |----------|---------|
-| \`DATABASE_URL\` | Postgres connection (pooler URL) |
-| \`DIRECT_URL\` | Direct Postgres URL (migrations) |
-| \`NEXT_PUBLIC_SUPABASE_URL\` | Supabase project URL |
-| \`NEXT_PUBLIC_SUPABASE_ANON_KEY\` | Supabase anon key |
-| \`SUPABASE_SERVICE_ROLE_KEY\` | Server-side Supabase admin |
+| \`DATABASE_URL\` | PostgreSQL connection (SmarterASP) |
+| \`DIRECT_URL\` | Same URL for Prisma CLI migrations |
+| \`AUTH_SESSION_SECRET\` | Signs login session cookies (32+ chars) |
 | \`NEXT_PUBLIC_APP_URL\` | Public site URL (https://yourdomain.com) — **baked in at build time** |
 | \`PII_ENCRYPTION_KEY\` | 32-byte base64 key for student PII |
 
@@ -624,27 +633,29 @@ The script runs **L1 BDD tests** (mock data + typecheck) before building, then e
    - Edit \`web.config\` \`<environmentVariables>\` (see comments in file), **or**
    - Use the included \`.env\` file beside \`server.js\` (see \`web.config.env.example\` for variable names).
 
-### Database (Supabase — not on SmarterASP)
+### Database (SmarterASP PostgreSQL)
 
-PostgreSQL stays on **Supabase**. From your dev machine (with production \`DIRECT_URL\` in \`.env.local\`):
+From your dev machine (with \`DIRECT_URL\` in \`.env.${envName}\`):
 
 \`\`\`bash
-npm run db:deploy
+npx dotenv -e .env.${envName} -- prisma migrate deploy
+npx dotenv -e .env.${envName} -- npm run db:seed
 \`\`\`
 
-Also run \`supabase/migrations/002_app_user_self_read.sql\` in Supabase SQL Editor if not done yet.
+Set \`SEED_SUPER_ADMIN_PASSWORD\` in that env file for the first seed. Schools and calendars are loaded via \`npm run import:school\`, not seed.
 
 ### Troubleshooting
 
 | Issue | Fix |
 |-------|-----|
 | Blank page / 500 | Check \`logs/node-stdout.log\`; verify env vars in \`web.config\` or \`.env\` |
+| \`ChunkLoadError\` / JS 404 / MIME \`text/plain\` | Static chunk missing on server. Re-upload the **entire** package (especially \`.next/static/\`) via zip→unzip, then restart Node. Hard-refresh the browser (Ctrl+Shift+R). Do not mix files from two different builds. |
 | SWC / native module error | Rebuild on Windows, re-upload \`node_modules\` |
 | Auth redirect loops | \`NEXT_PUBLIC_APP_URL\` must match your live URL (rebuild if wrong) |
 | HTTP not redirecting to HTTPS | Ensure \`web.config\` has the HTTP→HTTPS rewrite rule; URL Rewrite module must be enabled on IIS |
 | \`X-Powered-By\` still present | Redeploy latest \`web.config\` (removes ASP.NET header); Next.js header is disabled via \`poweredByHeader: false\` |
 | Redirect to \`localhost:PORT\` | IIS internal port — fixed in app; rebuild + set \`NEXT_PUBLIC_APP_URL\` to your public **https://** URL |
-| DB connection errors | Use Supabase **session pooler** on port **5432** for \`DATABASE_URL\` (SmarterASP blocks 6543). SSL: relaxed by default for Supabase. |
+| DB connection errors | Use SmarterASP PostgreSQL host/port from control panel; \`?sslmode=require\` on URL. SSL relaxed by default unless \`DATABASE_SSL_REJECT_UNAUTHORIZED=true\`. |
 | Dashboard 500 after login | Rebuild with latest \`npm run build:hosting\` (pg deps fix). If still failing: DB SSL/port — see above; check \`logs/node-stdout.log\` |
 
 KB: [Next.js on SmarterASP](https://www.smarterasp.net/support/kb/a2233/how-to-publish-a-next_js-project-to-your-hosting-account.aspx)

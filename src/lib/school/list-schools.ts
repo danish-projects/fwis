@@ -6,11 +6,11 @@ export async function listSchoolsForUser(
   user: AuthUser
 ): Promise<SchoolSummary[]> {
   const schools = await prisma.school.findMany({
-    where: user.roles.includes("SUPER_ADMIN")
+    where: user.roles.includes("NIGRA")
       ? { deletedAt: null, isActive: true }
       : { id: { in: user.schoolIds }, deletedAt: null, isActive: true },
     orderBy: { name: "asc" },
-    select: { id: true, name: true },
+    select: { id: true, name: true, code: true, city: true },
   });
 
   return schools;

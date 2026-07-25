@@ -1,16 +1,30 @@
 import { z } from "zod";
 import { UserRoleCode } from "@prisma/client";
-import { listPaginationSchema, optionalBooleanQuery } from "@/lib/validations/pagination";
+import {
+  LOGIN_USER_ID_REGEX,
+  toLoginUserId,
+} from "@/lib/auth/login-user-id";
+import {
+  emptyToUndefined,
+  listPaginationSchema,
+  optionalBooleanQuery,
+} from "@/lib/validations/pagination";
 
 const roleCodes = [
-  "SUPER_ADMIN",
+  "NIGRA",
+  "PRINCIPAL",
   "SCHOOL_ADMIN",
   "TEACHER",
+  "SUBSTITUTE",
   "READ_ONLY",
 ] as const satisfies readonly UserRoleCode[];
 
 const userCoreFieldsSchema = z.object({
-  email: z.string().email("Invalid email"),
+  userId: z
+    .string()
+    .min(2, "User ID is required")
+    .transform(toLoginUserId)
+    .refine((value) => LOGIN_USER_ID_REGEX.test(value), "Invalid user id"),
   fullName: z.string().min(1, "Full name is required"),
   roleCodes: z
     .array(z.enum(roleCodes))
@@ -29,7 +43,9 @@ function refineUserFields<
 >(data: T, ctx: z.RefinementCtx) {
   const needsSchool =
     data.roleCodes.includes("SCHOOL_ADMIN") ||
+    data.roleCodes.includes("PRINCIPAL") ||
     data.roleCodes.includes("TEACHER") ||
+    data.roleCodes.includes("SUBSTITUTE") ||
     data.roleCodes.includes("READ_ONLY");
 
   if (needsSchool && data.schoolIds.length === 0) {
@@ -40,21 +56,25 @@ function refineUserFields<
     });
   }
 
-  if (data.roleCodes.includes("SUPER_ADMIN") && data.roleCodes.length > 1) {
+  if (data.roleCodes.includes("NIGRA") && data.roleCodes.length > 1) {
     ctx.addIssue({
       code: "custom",
-      message: "Super Admin cannot be combined with other roles",
+      message: "Nigran cannot be combined with other roles",
       path: ["roleCodes"],
     });
   }
 
   if (
     data.gender &&
-    !(data.roleCodes.includes("SCHOOL_ADMIN") && data.roleCodes.length === 1)
+    !(
+      (data.roleCodes.includes("SCHOOL_ADMIN") ||
+        data.roleCodes.includes("PRINCIPAL")) &&
+      data.roleCodes.length === 1
+    )
   ) {
     ctx.addIssue({
       code: "custom",
-      message: "Section scope (gender) applies only to School Admin role",
+      message: "Section scope (gender) applies only to School Admin / Principal",
       path: ["gender"],
     });
   }
@@ -80,8 +100,8 @@ export const createUserSchema = userCoreFieldsSchema
 export type CreateUserInput = z.infer<typeof createUserSchema>;
 
 export const userListSchema = listPaginationSchema.extend({
-  role: z.enum(roleCodes).optional(),
-  schoolId: z.string().uuid().optional(),
+  role: emptyToUndefined(z.enum(roleCodes).optional()),
+  schoolId: emptyToUndefined(z.string().uuid().optional()),
   isActive: optionalBooleanQuery,
 });
 

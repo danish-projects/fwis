@@ -21,7 +21,7 @@ export async function listAcademicYearsForUser(
   user: AuthUser
 ): Promise<AcademicYearSummary[]> {
   const years = await prisma.academicYear.findMany({
-    where: user.roles.includes("SUPER_ADMIN")
+    where: user.roles.includes("NIGRA")
       ? { deletedAt: null }
       : {
           deletedAt: null,

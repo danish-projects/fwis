@@ -156,7 +156,7 @@ export default async function StudentsPage({ searchParams }: PageProps) {
                 <tr className="border-b text-left text-muted-foreground">
                   <th className="pb-3 pr-4 font-medium">Student</th>
                   <th className="pb-3 pr-4 font-medium">Gender</th>
-                  <th className="pb-3 pr-4 font-medium">Parent</th>
+                  <th className="pb-3 pr-4 font-medium">Guardian</th>
                   <th className="pb-3 pr-4 font-medium">Current School</th>
                   <th className="pb-3 pr-4 font-medium">Grade</th>
                   <th className="pb-3 pr-4 font-medium">Status</th>
@@ -183,9 +183,25 @@ export default async function StudentsPage({ searchParams }: PageProps) {
                         {student.gender.toLowerCase()}
                       </td>
                       <td className="py-3 pr-4">
-                        <p>{student.parentName ?? "—"}</p>
+                        <p>
+                          {[
+                            student.fatherGuardianFirstName,
+                            student.fatherGuardianLastName,
+                          ]
+                            .filter(Boolean)
+                            .join(" ") ||
+                            [
+                              student.motherGuardianFirstName,
+                              student.motherGuardianLastName,
+                            ]
+                              .filter(Boolean)
+                              .join(" ") ||
+                            "—"}
+                        </p>
                         <p className="text-xs text-muted-foreground">
-                          {student.parentPhone ?? ""}
+                          {student.fatherMobileWhatsappNumber ||
+                            student.motherMobileWhatsappNumber ||
+                            ""}
                         </p>
                       </td>
                       <td className="py-3 pr-4 text-muted-foreground">

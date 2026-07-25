@@ -1,6 +1,6 @@
 import { UserRoleCode } from "@prisma/client";
 import { redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
+import { cookies } from "next/headers";
 import { prisma } from "@/lib/prisma";
 import {
   getPrimaryRole,
@@ -9,34 +9,84 @@ import {
 } from "@/lib/auth/permissions";
 import type { GenderCode } from "@/lib/setup-types";
 import { resolveSectionScopedClassroomIds } from "@/lib/auth/section-scope";
+import { parseSessionToken, SESSION_COOKIE_NAME } from "@/lib/auth/session-cookie";
+import { ACADEMIC_YEAR_COOKIE } from "@/lib/academic-year/constants";
+import { canSwitchAcademicYear } from "@/lib/academic-year/can-switch-year";
+import { findCurrentAcademicYearSchoolForSchool } from "@/lib/academic-year/find-current-year";
 
 export type AuthUser = {
   id: string;
-  email: string;
+  /** Login handle (app_users.user_id), not an email address. */
+  userId: string;
   fullName: string | null;
   roles: UserRoleCode[];
   schoolIds: string[];
   gender: GenderCode | null;
-  teacherId?: string;
+  staffId?: string;
+  /** Year-scoped staff position code from StaffAssignment (selected year). */
+  staffRoleCode?: string;
+  isSubstituteTeacher: boolean;
   classroomIds: string[];
 };
 
-export async function getSessionUser(): Promise<AuthUser | null> {
-  const supabase = await createClient();
-  const {
-    data: { user },
-    error,
-  } = await supabase.auth.getUser();
+async function resolveSessionUserId(): Promise<string | null> {
+  const cookieStore = await cookies();
+  const session = await parseSessionToken(cookieStore.get(SESSION_COOKIE_NAME)?.value);
+  return session?.userId ?? null;
+}
 
-  // Invalid/expired refresh token — treat as signed out (middleware clears cookies).
-  if (error || !user) return null;
+/** Resolve academic_year_school ids for session classroom scoping. */
+async function resolveYearSchoolIdsForSession(
+  schoolIds: string[],
+  roles: UserRoleCode[]
+): Promise<string[]> {
+  if (schoolIds.length === 0) return [];
+
+  // Teachers / substitutes: always current school year.
+  if (!canSwitchAcademicYear(roles)) {
+    const current = await Promise.all(
+      schoolIds.map((schoolId) => findCurrentAcademicYearSchoolForSchool(schoolId))
+    );
+    return current.filter(Boolean).map((link) => link!.id);
+  }
+
+  const cookieStore = await cookies();
+  const cookieYearId = cookieStore.get(ACADEMIC_YEAR_COOKIE)?.value;
+
+  if (cookieYearId) {
+    const links = await prisma.academicYearSchool.findMany({
+      where: {
+        schoolId: { in: schoolIds },
+        academicYearId: cookieYearId,
+        deletedAt: null,
+      },
+      select: { id: true },
+    });
+    if (links.length > 0) return links.map((l) => l.id);
+  }
+
+  const current = await Promise.all(
+    schoolIds.map((schoolId) => findCurrentAcademicYearSchoolForSchool(schoolId))
+  );
+  return current.filter(Boolean).map((link) => link!.id);
+}
+
+export async function getSessionUser(): Promise<AuthUser | null> {
+  const userId = await resolveSessionUserId();
+  if (!userId) return null;
 
   const appUser = await prisma.appUser.findUnique({
-    where: { id: user.id },
+    where: { id: userId },
     include: {
       roles: { include: { role: true } },
       schools: true,
-      teacher: { include: { classrooms: true } },
+      staff: {
+        include: {
+          assignments: {
+            include: { role: true },
+          },
+        },
+      },
     },
   });
 
@@ -46,26 +96,41 @@ export async function getSessionUser(): Promise<AuthUser | null> {
   const schoolIds = appUser.schools.map((s) => s.schoolId);
   const gender = (appUser.gender as GenderCode | null) ?? null;
 
-  let classroomIds =
-    appUser.teacher?.classrooms.map((c) => c.classroomId) ?? [];
+  const yearSchoolIds = await resolveYearSchoolIdsForSession(schoolIds, roles);
+  const yearAssignments =
+    appUser.staff?.assignments.filter((a) =>
+      yearSchoolIds.includes(a.academicYearSchoolId)
+    ) ?? [];
 
+  const staffRoleCode = yearAssignments[0]?.role.code;
+  const isSubstituteTeacher = staffRoleCode === "SUBSTITUTE";
+
+  let classroomIds = yearAssignments
+    .map((a) => a.classroomId)
+    .filter((id): id is string => Boolean(id));
+
+  // Substitute teachers (and gendered school admins without a linked classroom)
+  // see every grade in their Boys/Girls section.
   if (
-    classroomIds.length === 0 &&
-    roles.includes("SCHOOL_ADMIN") &&
     gender &&
-    schoolIds.length > 0
+    schoolIds.length > 0 &&
+    (isSubstituteTeacher ||
+      (classroomIds.length === 0 &&
+        roles.some((r) => ["SCHOOL_ADMIN", "PRINCIPAL"].includes(r))))
   ) {
     classroomIds = await resolveSectionScopedClassroomIds(schoolIds, gender);
   }
 
   return {
     id: appUser.id,
-    email: appUser.email,
+    userId: appUser.userId,
     fullName: appUser.fullName,
     roles,
     schoolIds,
     gender,
-    teacherId: appUser.teacher?.id,
+    staffId: appUser.staff?.id,
+    staffRoleCode,
+    isSubstituteTeacher,
     classroomIds,
   };
 }
@@ -88,7 +153,7 @@ export async function requirePermission(
 
   if (
     context?.schoolId &&
-    !user.roles.includes("SUPER_ADMIN") &&
+    !user.roles.includes("NIGRA") &&
     !user.schoolIds.includes(context.schoolId)
   ) {
     redirect("/unauthorized");
@@ -100,13 +165,13 @@ export async function requirePermission(
 export async function requireRole(...roles: UserRoleCode[]): Promise<AuthUser> {
   const user = await requireUser();
   const primary = getPrimaryRole(user.roles);
-  if (!roles.includes(primary) && !user.roles.includes("SUPER_ADMIN")) {
+  if (!roles.includes(primary) && !user.roles.includes("NIGRA")) {
     redirect("/unauthorized");
   }
   return user;
 }
 
 export function canAccessSchool(user: AuthUser, schoolId: string): boolean {
-  if (user.roles.includes("SUPER_ADMIN")) return true;
+  if (user.roles.includes("NIGRA")) return true;
   return user.schoolIds.includes(schoolId);
 }

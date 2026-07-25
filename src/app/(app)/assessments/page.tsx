@@ -1,43 +1,58 @@
-import { getClassroomsForAssessment } from "@/actions/enrollments";
-import { getSessionUser, requirePermission } from "@/lib/auth/session";
-import { ClassroomCardsGrid } from "@/components/shared/classroom-cards-grid";
-import { filterClassroomsForSelectedSchool } from "@/lib/school/filter-classrooms";
-import { getSelectedSchool } from "@/lib/school/resolve-school";
+import { notFound, redirect } from "next/navigation";
+import { getCourseMaterialAssessmentsPageData } from "@/actions/course-material-assessments";
+import { CourseMaterialAssessmentsView } from "@/components/assessments/course-material-assessments-view";
+import { requirePermission } from "@/lib/auth/session";
+import { gradeNameToSlug } from "@/lib/lesson-plans/page-params";
 
 export const metadata = { title: "Assessments" };
 
-export default async function AssessmentsPage() {
-  await requirePermission("assessments:read");
-  const user = await getSessionUser();
-  const [classrooms, selectedSchool] = await Promise.all([
-    getClassroomsForAssessment(),
-    user ? getSelectedSchool(user) : null,
-  ]);
+type PageProps = {
+  searchParams: Promise<{ grade?: string; exam?: string }>;
+};
 
-  const visibleClassrooms = filterClassroomsForSelectedSchool(
-    classrooms,
-    selectedSchool
-  );
+export default async function AssessmentsPage({ searchParams }: PageProps) {
+  await requirePermission("assessments:read");
+  const params = await searchParams;
+
+  const data = await getCourseMaterialAssessmentsPageData({
+    gradeParam: params.grade,
+    assessmentType: params.exam,
+  });
+  if (!data) notFound();
+
+  const selectedGradeName =
+    data.selectedGradeId != null
+      ? data.grades.find((grade) => grade.id === data.selectedGradeId)?.name ??
+        null
+      : null;
+  const expectedGradeSlug = selectedGradeName
+    ? gradeNameToSlug(selectedGradeName)
+    : null;
+  const actualGradeSlug = params.grade?.trim().toLowerCase() ?? null;
+  const expectedExam = data.selectedAssessmentType;
+  const actualExam = params.exam ?? null;
+
+  if (
+    expectedGradeSlug !== actualGradeSlug ||
+    expectedExam !== actualExam
+  ) {
+    const query = new URLSearchParams();
+    if (expectedGradeSlug) query.set("grade", expectedGradeSlug);
+    if (expectedExam) query.set("exam", expectedExam);
+    const qs = query.toString();
+    redirect(qs ? `/assessments?${qs}` : "/assessments");
+  }
 
   return (
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold md:text-3xl">Assessments</h1>
         <p className="text-muted-foreground">
-          Enter quiz, midterm, and final exam scores by grade
-          {selectedSchool ? ` · ${selectedSchool.name}` : ""}
+          Course Materials · assessment PDFs for {data.schoolName}
         </p>
       </div>
 
-      <ClassroomCardsGrid
-        classrooms={visibleClassrooms.map((c) => ({
-          id: c.id,
-          name: c.name,
-          _count: c._count,
-        }))}
-        hrefPrefix="/assessments"
-        actionLabel="Enter Scores"
-      />
+      <CourseMaterialAssessmentsView data={data} pagePath="/assessments" />
     </div>
   );
 }

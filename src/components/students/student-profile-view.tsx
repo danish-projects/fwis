@@ -108,31 +108,97 @@ export function StudentProfileView({ profile }: StudentProfileViewProps) {
             </div>
             <div>
               <p className="text-sm text-muted-foreground">Address</p>
-              <p>{profile.student.address ?? "—"}</p>
+              <p>{profile.student.streetAddress ?? "—"}</p>
+            </div>
+            <div>
+              <p className="text-sm text-muted-foreground">City</p>
+              <p>{profile.student.city ?? "—"}</p>
+            </div>
+            <div>
+              <p className="text-sm text-muted-foreground">State / Province</p>
+              <p>{profile.student.stateProvince ?? "—"}</p>
+            </div>
+            <div>
+              <p className="text-sm text-muted-foreground">Zip / Postal</p>
+              <p>{profile.student.zipPostalCode ?? "—"}</p>
+            </div>
+            <div>
+              <p className="text-sm text-muted-foreground">Country</p>
+              <p>{profile.student.country ?? "—"}</p>
+            </div>
+            <div>
+              <p className="text-sm text-muted-foreground">Email</p>
+              <p>{profile.student.emailAddress ?? "—"}</p>
             </div>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader>
-            <CardTitle>Parent / Contact</CardTitle>
+            <CardTitle>Father / Guardian</CardTitle>
           </CardHeader>
           <CardContent className="grid gap-4 sm:grid-cols-2">
             <div>
-              <p className="text-sm text-muted-foreground">Parent / Guardian</p>
-              <p>{profile.student.parentName ?? "—"}</p>
+              <p className="text-sm text-muted-foreground">Name</p>
+              <p>
+                {[
+                  profile.student.fatherGuardianFirstName,
+                  profile.student.fatherGuardianLastName,
+                ]
+                  .filter(Boolean)
+                  .join(" ") || "—"}
+              </p>
             </div>
             <div>
-              <p className="text-sm text-muted-foreground">Phone</p>
-              <p>{profile.student.parentPhone ?? "—"}</p>
+              <p className="text-sm text-muted-foreground">Mobile / WhatsApp</p>
+              <p>{profile.student.fatherMobileWhatsappNumber ?? "—"}</p>
             </div>
             <div>
-              <p className="text-sm text-muted-foreground">Email</p>
-              <p>{profile.student.parentEmail ?? "—"}</p>
+              <p className="text-sm text-muted-foreground">Parental responsibility</p>
+              <p>
+                {profile.student.fatherParentalResponsibility == null
+                  ? "—"
+                  : profile.student.fatherParentalResponsibility
+                    ? "Yes"
+                    : "No"}
+              </p>
             </div>
             <div>
               <p className="text-sm text-muted-foreground">Emergency Contact</p>
               <p>{profile.student.emergencyContact ?? "—"}</p>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Mother / Guardian</CardTitle>
+          </CardHeader>
+          <CardContent className="grid gap-4 sm:grid-cols-2">
+            <div>
+              <p className="text-sm text-muted-foreground">Name</p>
+              <p>
+                {[
+                  profile.student.motherGuardianFirstName,
+                  profile.student.motherGuardianLastName,
+                ]
+                  .filter(Boolean)
+                  .join(" ") || "—"}
+              </p>
+            </div>
+            <div>
+              <p className="text-sm text-muted-foreground">Mobile / WhatsApp</p>
+              <p>{profile.student.motherMobileWhatsappNumber ?? "—"}</p>
+            </div>
+            <div>
+              <p className="text-sm text-muted-foreground">Parental responsibility</p>
+              <p>
+                {profile.student.motherParentalResponsibility == null
+                  ? "—"
+                  : profile.student.motherParentalResponsibility
+                    ? "Yes"
+                    : "No"}
+              </p>
             </div>
           </CardContent>
         </Card>
@@ -158,9 +224,9 @@ export function StudentProfileView({ profile }: StudentProfileViewProps) {
                 <p className="font-medium">{profile.enrollment.gradeName}</p>
               </div>
               <div>
-                <p className="text-sm text-muted-foreground">Teacher</p>
+                <p className="text-sm text-muted-foreground">Staff</p>
                 <p className="font-medium">
-                  {profile.enrollment.teacherName ?? "—"}
+                  {profile.enrollment.staffName ?? "—"}
                 </p>
               </div>
               <div>

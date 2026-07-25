@@ -1,14 +1,10 @@
 import ExcelJS from "exceljs";
+import { calendarDateKey } from "../../src/lib/calendar/calendar-date";
 import {
-  ASSESSMENT_COLUMNS,
-  ASSESSMENT_LEGACY_COLUMNS,
-  ATTENDANCE_COLUMNS,
-  ATTENDANCE_LEGACY_COLUMNS,
-  CALENDAR_COLUMNS,
-  SCHOOL_SETUP_COLUMNS,
-  SHEET_NAMES,
+  FORBIDDEN_IMPORT_SHEETS,
+  IMPORT_SHEET_NAMES,
+  STAFF_COLUMNS,
   STUDENT_COLUMNS,
-  TEACHER_COLUMNS,
 } from "./sheet-spec";
 
 export type RowRecord = Record<string, string>;
@@ -16,7 +12,7 @@ export type RowRecord = Record<string, string>;
 function cellValue(value: ExcelJS.CellValue): string {
   if (value == null) return "";
   if (value instanceof Date) {
-    return value.toISOString().slice(0, 10);
+    return calendarDateKey(value);
   }
   if (typeof value === "object" && "text" in value) {
     return String(value.text ?? "").trim();
@@ -30,7 +26,9 @@ function cellValue(value: ExcelJS.CellValue): string {
 function getSheetHeaders(workbook: ExcelJS.Workbook, sheetName: string): string[] {
   const sheet = workbook.getWorksheet(sheetName);
   if (!sheet) {
-    throw new Error(`Missing sheet "${sheetName}". Use the FWIS import template.`);
+    throw new Error(
+      `Missing sheet "${sheetName}". Use the FWIS Staff + Students import template.`
+    );
   }
 
   const headerRow = sheet.getRow(1);
@@ -48,14 +46,16 @@ function readSheetRows(
 ): RowRecord[] {
   const sheet = workbook.getWorksheet(sheetName);
   if (!sheet) {
-    throw new Error(`Missing sheet "${sheetName}". Use the FWIS import template.`);
+    throw new Error(
+      `Missing sheet "${sheetName}". Use the FWIS Staff + Students import template.`
+    );
   }
 
   const headers = getSheetHeaders(workbook, sheetName);
   const normalizedExpected = expectedColumns.map((c) => c.toLowerCase());
   for (const col of normalizedExpected) {
     if (!headers.includes(col)) {
-      throw new_string(`Sheet "${sheetName}" is missing column "${col}".`);
+      throw new Error(`Sheet "${sheetName}" is missing column "${col}".`);
     }
   }
 
@@ -78,71 +78,32 @@ function readSheetRows(
   return rows;
 }
 
-function hasColumns(headers: string[], columns: readonly string[]): boolean {
-  const normalized = columns.map((c) => c.toLowerCase());
-  return normalized.every((col) => headers.includes(col));
-}
-
-function readStudentLinkedSheet(
-  workbook: ExcelJS.Workbook,
-  sheetName: string,
-  primaryColumns: readonly string[],
-  legacyColumns: readonly string[]
-): RowRecord[] {
-  const headers = getSheetHeaders(workbook, sheetName);
-
-  if (hasColumns(headers, primaryColumns)) {
-    return readSheetRows(workbook, sheetName, primaryColumns);
+function assertNoForbiddenSheets(workbook: ExcelJS.Workbook) {
+  const found: string[] = [];
+  for (const name of FORBIDDEN_IMPORT_SHEETS) {
+    if (workbook.getWorksheet(name)) found.push(name);
   }
-
-  if (hasColumns(headers, [...primaryColumns.slice(0, 3), ...legacyColumns, ...primaryColumns.slice(4)])) {
-    // Legacy workbook: school fields + name/grade/section + remaining score/date columns
-    const legacyExpected = [
-      ...primaryColumns.slice(0, 3),
-      ...legacyColumns,
-      ...primaryColumns.slice(4),
-    ];
-    return readSheetRows(workbook, sheetName, legacyExpected);
+  if (found.length > 0) {
+    throw new Error(
+      `This workbook includes sheets that are not imported: ${found.join(", ")}. ` +
+        `Use the Staff + Students template only (npm run import:template).`
+    );
   }
-
-  throw new Error(
-    `Sheet "${sheetName}" must include column "student_id" (new template) or legacy columns ${legacyColumns.join(", ")}.`
-  );
 }
 
 export type ImportWorkbookData = {
-  schoolSetup: RowRecord[];
-  teachers: RowRecord[];
+  staff: RowRecord[];
   students: RowRecord[];
-  attendance: RowRecord[];
-  assessments: RowRecord[];
-  calendarOptional: RowRecord[];
 };
 
 export async function readImportWorkbook(filePath: string): Promise<ImportWorkbookData> {
   const workbook = new ExcelJS.Workbook();
   await workbook.xlsx.readFile(filePath);
 
+  assertNoForbiddenSheets(workbook);
+
   return {
-    schoolSetup: readSheetRows(workbook, SHEET_NAMES.schoolSetup, SCHOOL_SETUP_COLUMNS),
-    teachers: readSheetRows(workbook, SHEET_NAMES.teachers, TEACHER_COLUMNS),
-    students: readSheetRows(workbook, SHEET_NAMES.students, STUDENT_COLUMNS),
-    attendance: readStudentLinkedSheet(
-      workbook,
-      SHEET_NAMES.attendance,
-      ATTENDANCE_COLUMNS,
-      ATTENDANCE_LEGACY_COLUMNS
-    ),
-    assessments: readStudentLinkedSheet(
-      workbook,
-      SHEET_NAMES.assessments,
-      ASSESSMENT_COLUMNS,
-      ASSESSMENT_LEGACY_COLUMNS
-    ),
-    calendarOptional: readSheetRows(
-      workbook,
-      SHEET_NAMES.calendarOptional,
-      CALENDAR_COLUMNS
-    ),
+    staff: readSheetRows(workbook, IMPORT_SHEET_NAMES.staff, STAFF_COLUMNS),
+    students: readSheetRows(workbook, IMPORT_SHEET_NAMES.students, STUDENT_COLUMNS),
   };
 }

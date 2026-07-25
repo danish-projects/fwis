@@ -192,12 +192,14 @@
 flowchart TB
   subgraph setup["1 · School setup — admin, once per year"]
     School["School"]
-    Year["Academic Year"]
-    Calendar["Sunday Calendar"]
+    Year["Academic Year\n(global)"]
+    SchoolYear["School ↔ Year link"]
+    Calendar["Sunday Calendar\n(per school + year)"]
     Grade["Grade / Classroom"]
     Teacher["Teacher"]
-    School --> Year
-    Year --> Calendar
+    School --> SchoolYear
+    Year --> SchoolYear
+    SchoolYear --> Calendar
     School --> Grade
     School --> Teacher
     Teacher --> Grade
@@ -234,12 +236,12 @@ flowchart TB
       <table>
         <tr><th>Entity</th><th>Relationship</th><th>Example</th></tr>
         <tr><td><strong>School</strong></td><td>Root of all data</td><td>Houston, Chicago, Dallas</td></tr>
-        <tr><td><strong>Academic Year</strong></td><td>Belongs to one school</td><td>2025–2026</td></tr>
-        <tr><td><strong>Calendar</strong></td><td>Belongs to academic year — one row per Sunday</td><td>Instructional, Quiz 1–5, Holiday, Final</td></tr>
+        <tr><td><strong>Academic Year</strong></td><td>Global season; linked to each school</td><td>2025–2026</td></tr>
+        <tr><td><strong>Calendar</strong></td><td>Belongs to each school for that academic year — one row per Sunday</td><td>Instructional, Quiz 1–5, Holiday, Final</td></tr>
         <tr><td><strong>Grade / Classroom</strong></td><td>Belongs to school — 12 per campus</td><td>Grade 1 Boys</td></tr>
         <tr><td><strong>Teacher</strong></td><td>Belongs to school; assigned to one grade</td><td>Grade 1 Boys teacher</td></tr>
       </table>
-      <p style="margin-top: 16px;">The calendar defines which Sundays count toward attendance % and which session type applies (quiz day, holiday, etc.).</p>
+      <p style="margin-top: 16px;">Each school has its own calendar for the linked year — Houston and Chicago Sundays are separate. Those days define attendance % and session type (quiz day, holiday, etc.).</p>
     </section>
 
     <section class="slide" data-slide="5">
@@ -295,19 +297,32 @@ flowchart TB
     </section>
 
     <section class="slide" data-slide="7">
-      <h2 class="slide-title">Who uses what</h2>
-      <p class="slide-subtitle">Roles map to the three layers of the hierarchy.</p>
+      <h2 class="slide-title">Users, roles &amp; permissions</h2>
+      <p class="slide-subtitle">Each login is an App User with roles and school access. Permissions apply in the sidebar and on every server action.</p>
       <table>
-        <tr><th>Role</th><th>Setup (school → calendar)</th><th>Students &amp; enrollments</th><th>Sunday entry</th></tr>
-        <tr><td><strong>Super Admin</strong></td><td>All schools</td><td>All schools</td><td>Oversight, consolidate attendance</td></tr>
-        <tr><td><strong>School Admin</strong></td><td>Their school</td><td>Their school</td><td>All grades — attendance matrix, assessments</td></tr>
-        <tr><td><strong>Teacher</strong></td><td>—</td><td>—</td><td>Assigned grade only</td></tr>
+        <tr><th>Role</th><th>Scope</th><th>Setup</th><th>Sunday entry</th></tr>
+        <tr><td><strong>Super Admin</strong></td><td>All schools</td><td>Create schools, all modules</td><td>Oversight, consolidate attendance</td></tr>
+        <tr><td><strong>School Admin</strong></td><td>School; optional Boys/Girls section</td><td>Calendar, grades, teachers, users</td><td>Attendance matrix, assessments</td></tr>
+        <tr><td><strong>Teacher</strong></td><td>One classroom</td><td>—</td><td>Attendance, behavior, assessments</td></tr>
+        <tr><td><strong>Read Only</strong></td><td>Assigned schools</td><td>View only</td><td>View only</td></tr>
       </table>
-      <h3>Sidebar groups in the app</h3>
+      <h3 style="margin-top: 16px;">Houston demo logins</h3>
+      <p style="font-size: 0.8125rem; color: var(--muted); margin-bottom: 8px;">Passwords differ by role — see live demo table. Logins come from <strong>Create default app users</strong> on school create (code <code>HOU</code>).</p>
+      <table>
+        <tr><th>Role</th><th>User ID</th><th>Scope</th></tr>
+        <tr><td>Principal</td><td><code>hou.principal</code></td><td>Entire Houston school</td></tr>
+        <tr><td>School Admin (Boys)</td><td><code>hou.m.admin</code></td><td>All Boys grades</td></tr>
+        <tr><td>School Admin (Girls)</td><td><code>hou.f.admin</code></td><td>All Girls grades</td></tr>
+        <tr><td>Teacher (Boys)</td><td><code>hou.b.g1</code></td><td>Grade 1 Boys</td></tr>
+        <tr><td>Teacher (Girls)</td><td><code>hou.g.g1</code></td><td>Grade 1 Girls</td></tr>
+        <tr><td>Substitute (Boys)</td><td><code>hou.m.sub</code></td><td>All Boys grades</td></tr>
+        <tr><td>Substitute (Girls)</td><td><code>hou.f.sub</code></td><td>All Girls grades</td></tr>
+      </table>
+      <h3>Sidebar groups</h3>
       <div class="three-col">
-        <div class="card"><strong>Classroom</strong><span>Attendance, Consolidate Attendance, Assessments</span></div>
-        <div class="card"><strong>Setup</strong><span>Schools, Academic Years, Calendar, Grades, Teachers</span></div>
-        <div class="card"><strong>Students</strong><span>Students, Enrollments</span></div>
+        <div class="card"><strong>Classroom</strong><span>Attendance, Consolidate, Assessments, Transcript</span></div>
+        <div class="card"><strong>Setup</strong><span>Schools, Academic Years, Calendar, Grades, Backup</span></div>
+        <div class="card"><strong>Students &amp; Admin</strong><span>Students, Enrollments, Users</span></div>
       </div>
     </section>
 
@@ -360,7 +375,7 @@ flowchart TB
           <h3>Setup</h3>
           <ul class="checklist">
             <li><input type="checkbox" id="c-schools" /><label for="c-schools"><strong>Schools</strong> <code>/schools</code><span class="hint">List with FWIS code (e.g. FWIS-HOU); detail &amp; edit</span></label></li>
-            <li><input type="checkbox" id="c-years" /><label for="c-years"><strong>Academic years</strong> <code>/academic-years</code><span class="hint">One global year per name; edit links schools via checkboxes; FWIS Docs folder on year</span></label></li>
+            <li><input type="checkbox" id="c-years" /><label for="c-years"><strong>Academic years</strong> <code>/academic-years</code><span class="hint">One global year per name; edit links schools via checkboxes; Drive year folder matched by name under FWIS Docs env parent</span></label></li>
             <li><input type="checkbox" id="c-cal" /><label for="c-cal"><strong>Calendar</strong> <code>/calendar</code><span class="hint">Sunday list; session types (Instructional, Quiz 1–5, Holiday, Final); bulk generate</span></label></li>
             <li><input type="checkbox" id="c-grades" /><label for="c-grades"><strong>Grades / classrooms</strong> <code>/grades</code><span class="hint">Grade 1–6 × Boys/Girls per selected school; create &amp; assign teachers</span></label></li>
             <li><input type="checkbox" id="c-teachers" /><label for="c-teachers"><strong>Teachers</strong> <code>/teachers</code><span class="hint">Per-school list; gender → Boys/Girls grade assignment; one grade per teacher</span></label></li>
@@ -379,8 +394,8 @@ flowchart TB
           <ul class="checklist">
             <li><input type="checkbox" id="c-att" /><label for="c-att"><strong>Attendance</strong> <code>/attendance</code> · <code>/teacher/attendance</code><span class="hint">Pick grade → mark P / A / T per student per Sunday; behavior on same screen</span></label></li>
             <li><input type="checkbox" id="c-consolidate" /><label for="c-consolidate"><strong>Consolidate attendance</strong> <code>/attendance/consolidate</code><span class="hint">Matrix: students × Sundays; filter by grade &amp; session</span></label></li>
-            <li><input type="checkbox" id="c-assess" /><label for="c-assess"><strong>Assessments</strong> <code>/assessments</code> · <code>/teacher/assessments</code><span class="hint">Score grid: Quiz 1–5, midterm project, final exam</span></label></li>
-            <li><input type="checkbox" id="c-lesson" /><label for="c-lesson"><strong>Lesson plans</strong> <code>/lesson-plans</code><span class="hint">Google Drive PDFs from FWIS Docs/{year}/Lesson Plans/{grade}; week picker</span></label></li>
+            <li><input type="checkbox" id="c-lesson" /><label for="c-lesson"><strong>Course Materials → Lesson plans</strong> <code>/lesson-plans</code><span class="hint">Google Drive PDFs from FWIS Docs/{year}/Lesson Plans/{grade}; week picker</span></label></li>
+            <li><input type="checkbox" id="c-assess" /><label for="c-assess"><strong>Course Materials → Assessments</strong> <code>/assessments</code> · <code>/teacher/assessments</code><span class="hint">Drive PDFs from FWIS Docs/{year}/Assessments/{exam}/{grade}; Quiz 1–5 + Final</span></label></li>
             <li><input type="checkbox" id="c-transcript" /><label for="c-transcript"><strong>Transcript</strong> <code>/transcript</code><span class="hint">Printable class transcript; green View Transcript button</span></label></li>
             <li><input type="checkbox" id="c-rankings" /><label for="c-rankings"><strong>Rankings</strong> <code>/rankings</code><span class="hint">Class rank by final %; Export Certificate (PDF)</span></label></li>
           </ul>
@@ -399,18 +414,24 @@ flowchart TB
 
     <section class="slide title-slide" data-slide="10">
       <h2 class="slide-title">Live demo</h2>
-      <p class="slide-subtitle">Run <code>npm run setup</code> once, then walk through the hierarchy in 10 minutes.</p>
-      <table style="max-width: 720px; margin: 0 auto;">
-        <tr><th>Role</th><th>Email</th><th>Password</th></tr>
-        <tr><td>Super Admin</td><td><code>superadmin@fwis.org</code></td><td><code>FwisAdmin786!</code></td></tr>
-        <tr><td>School Admin</td><td><code>admin.houston@fwis.org</code></td><td><code>FwisAdmin786!</code></td></tr>
-        <tr><td>Teacher</td><td><code>grade1.boys.houston@fwis.org</code></td><td><code>FwisTeacher786!</code></td></tr>
+      <p class="slide-subtitle">Run <code>npm run setup</code>, create the school with default users, then import Staff/Students.</p>
+      <table style="max-width: 860px; margin: 0 auto; font-size: 0.8125rem;">
+        <tr><th>Role</th><th>User ID</th><th>Password</th></tr>
+        <tr><td>Super Admin</td><td><code>majlis</code></td><td><code>SEED_SUPER_ADMIN_PASSWORD</code> / <code>FwisMajlis786!</code></td></tr>
+        <tr><td>Principal</td><td><code>hou.principal</code></td><td><code>FwisPrincipal786!</code></td></tr>
+        <tr><td>School Admin (Boys)</td><td><code>hou.m.admin</code></td><td><code>FwisAdmin786!</code></td></tr>
+        <tr><td>School Admin (Girls)</td><td><code>hou.f.admin</code></td><td><code>FwisAdmin786!</code></td></tr>
+        <tr><td>Teacher (Boys)</td><td><code>hou.b.g1</code></td><td><code>FwisTeacher786!</code></td></tr>
+        <tr><td>Teacher (Girls)</td><td><code>hou.g.g1</code></td><td><code>FwisTeacher786!</code></td></tr>
+        <tr><td>Substitute (Boys)</td><td><code>hou.m.sub</code></td><td><code>FwisSub786!</code></td></tr>
+        <tr><td>Substitute (Girls)</td><td><code>hou.f.sub</code></td><td><code>FwisSub786!</code></td></tr>
       </table>
-      <ol style="margin-top: 24px; max-width: 560px; text-align: left; margin-left: auto; margin-right: auto;">
-        <li>School Admin — academic year + calendar <em>(setup)</em></li>
-        <li>School Admin — student + enrollment <em>(people)</em></li>
-        <li>Teacher — attendance + behavior on a Sunday <em>(operations)</em></li>
-        <li>Teacher — assessment scores → final grade preview</li>
+      <ol style="margin-top: 24px; max-width: 600px; text-align: left; margin-left: auto; margin-right: auto;">
+        <li>Super Admin — school/year switcher + nationwide dashboard</li>
+        <li>Principal (<code>hou.principal</code>) — academic year + calendar</li>
+        <li>School Admin (<code>hou.f.admin</code>) — Girls section scope</li>
+        <li>Teacher (<code>hou.b.g1</code>) — attendance + behavior</li>
+        <li>Substitute (<code>hou.m.sub</code>) — Boys section across grades</li>
       </ol>
     </section>
 

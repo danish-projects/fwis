@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import {
   Calendar,
   CalendarRange,
+  ChevronDown,
   ClipboardCheck,
   BookOpen,
   Download,
@@ -12,6 +13,7 @@ import {
   FileText,
   GraduationCap,
   LayoutDashboard,
+  Library,
   LogOut,
   Menu,
   Moon,
@@ -26,13 +28,17 @@ import {
   Users,
 } from "lucide-react";
 import { useTheme } from "@/components/providers/theme-provider";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { AcademicYearSwitcher } from "@/components/layout/academic-year-switcher";
 import { SchoolSwitcher } from "@/components/layout/school-switcher";
 import { cn } from "@/lib/utils";
 import { isNavLinkActive } from "@/lib/auth/nav-active";
-import type { NavGroup } from "@/lib/auth/permissions";
+import {
+  collectNavHrefs,
+  type NavGroup,
+  type NavItem,
+} from "@/lib/auth/permissions";
 import type { AcademicYearSummary } from "@/lib/academic-year/constants";
 import type { SchoolSummary } from "@/lib/school/constants";
 
@@ -54,6 +60,7 @@ const ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
   Download,
   Table2,
   Trophy,
+  Library,
 };
 
 type AppSidebarProps = {
@@ -62,10 +69,114 @@ type AppSidebarProps = {
   userEmail: string;
   academicYears: AcademicYearSummary[];
   selectedAcademicYearId: string | null;
+  canSwitchAcademicYear?: boolean;
   schools: SchoolSummary[];
   selectedSchoolId: string | null;
   onSignOut: () => void;
 };
+
+function childIsActive(
+  pathname: string,
+  item: NavItem,
+  allHrefs: string[]
+): boolean {
+  if (item.href && isNavLinkActive(pathname, item.href, allHrefs)) return true;
+  return (
+    item.children?.some((child) => childIsActive(pathname, child, allHrefs)) ??
+    false
+  );
+}
+
+function NavLeaf({
+  item,
+  pathname,
+  allHrefs,
+  onNavigate,
+  nested = false,
+}: {
+  item: NavItem;
+  pathname: string;
+  allHrefs: string[];
+  onNavigate: () => void;
+  nested?: boolean;
+}) {
+  if (!item.href) return null;
+  const Icon = ICONS[item.icon] ?? LayoutDashboard;
+  const active = isNavLinkActive(pathname, item.href, allHrefs);
+
+  return (
+    <Link
+      href={item.href}
+      onClick={onNavigate}
+      className={cn(
+        "flex items-center gap-3 rounded-lg py-2.5 text-sm font-medium transition-colors",
+        nested ? "px-3 pl-9" : "px-3",
+        active
+          ? "bg-primary text-primary-foreground"
+          : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+      )}
+    >
+      <Icon className="h-4 w-4 shrink-0" />
+      {item.title}
+    </Link>
+  );
+}
+
+function NavBranch({
+  item,
+  pathname,
+  allHrefs,
+  onNavigate,
+}: {
+  item: NavItem;
+  pathname: string;
+  allHrefs: string[];
+  onNavigate: () => void;
+}) {
+  const Icon = ICONS[item.icon] ?? LayoutDashboard;
+  const active = childIsActive(pathname, item, allHrefs);
+  const [expanded, setExpanded] = useState(active);
+
+  useEffect(() => {
+    if (active) setExpanded(true);
+  }, [active]);
+
+  return (
+    <div className="space-y-1">
+      <button
+        type="button"
+        onClick={() => setExpanded((value: boolean) => !value)}
+        className={cn(
+          "flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors",
+          active
+            ? "bg-accent text-accent-foreground"
+            : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+        )}
+        aria-expanded={expanded}
+      >
+        <Icon className="h-4 w-4 shrink-0" />
+        <span className="flex-1 text-left">{item.title}</span>
+        <ChevronDown
+          className={cn(
+            "h-4 w-4 shrink-0 transition-transform",
+            expanded ? "rotate-0" : "-rotate-90"
+          )}
+        />
+      </button>
+      {expanded &&
+        item.children?.map((child) => (
+          <NavLeaf
+            key={child.href ?? child.title}
+            item={child}
+            pathname={pathname}
+            allHrefs={allHrefs}
+            onNavigate={onNavigate}
+            nested
+          />
+        ))}
+    </div>
+  );
+}
 
 export function AppSidebar({
   navGroups,
@@ -73,6 +184,7 @@ export function AppSidebar({
   userEmail,
   academicYears,
   selectedAcademicYearId,
+  canSwitchAcademicYear = true,
   schools,
   selectedSchoolId,
   onSignOut,
@@ -80,7 +192,7 @@ export function AppSidebar({
   const pathname = usePathname();
   const { setTheme } = useTheme();
   const [open, setOpen] = useState(false);
-  const allHrefs = navGroups.flatMap((group) => group.items.map((item) => item.href));
+  const allHrefs = collectNavHrefs(navGroups.flatMap((group) => group.items));
 
   const content = (
     <div className="flex h-full flex-col">
@@ -101,6 +213,7 @@ export function AppSidebar({
           <AcademicYearSwitcher
             years={academicYears}
             selectedYearId={selectedAcademicYearId}
+            canSwitch={canSwitchAcademicYear}
             className={schools.length > 0 ? "pb-2" : undefined}
           />
           <SchoolSwitcher
@@ -118,26 +231,25 @@ export function AppSidebar({
                 {group.title}
               </p>
             )}
-            {group.items.map((item) => {
-              const Icon = ICONS[item.icon] ?? LayoutDashboard;
-              const active = isNavLinkActive(pathname, item.href, allHrefs);
-              return (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  onClick={() => setOpen(false)}
-                  className={cn(
-                    "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors",
-                    active
-                      ? "bg-primary text-primary-foreground"
-                      : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
-                  )}
-                >
-                  <Icon className="h-4 w-4 shrink-0" />
-                  {item.title}
-                </Link>
-              );
-            })}
+            {group.items.map((item) =>
+              item.children?.length ? (
+                <NavBranch
+                  key={`parent:${item.title}`}
+                  item={item}
+                  pathname={pathname}
+                  allHrefs={allHrefs}
+                  onNavigate={() => setOpen(false)}
+                />
+              ) : (
+                <NavLeaf
+                  key={item.href ?? item.title}
+                  item={item}
+                  pathname={pathname}
+                  allHrefs={allHrefs}
+                  onNavigate={() => setOpen(false)}
+                />
+              )
+            )}
           </div>
         ))}
       </nav>
@@ -160,7 +272,6 @@ export function AppSidebar({
             }}
             aria-label="Toggle theme"
           >
-            {/* Both icons always render so SSR HTML matches hydration; CSS picks the active one. */}
             <Sun className="hidden h-4 w-4 dark:block" aria-hidden />
             <Moon className="block h-4 w-4 dark:hidden" aria-hidden />
           </Button>

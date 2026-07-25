@@ -26,7 +26,6 @@ function parseCreateInput(data: AcademicYearCreateInput) {
     name: parsed.name.trim(),
     startDate: new Date(parsed.startDate),
     endDate: new Date(parsed.endDate),
-    docsDriveFolderId: parsed.docsDriveFolderId?.trim() || null,
     isActive: parsed.isActive,
     generateCalendar: parsed.generateCalendar,
   };
@@ -39,7 +38,6 @@ function parseUpdateInput(data: AcademicYearInput) {
     name: parsed.name.trim(),
     startDate: new Date(parsed.startDate),
     endDate: new Date(parsed.endDate),
-    docsDriveFolderId: parsed.docsDriveFolderId?.trim() || null,
     isActive: parsed.isActive,
     generateCalendar: parsed.generateCalendar,
   };
@@ -105,12 +103,10 @@ async function syncSchoolLinks(
       linkId = restored.id;
     } else if (prior) {
       linkId = prior.id;
-      if (options.isActive) {
-        await prisma.academicYearSchool.update({
-          where: { id: prior.id },
-          data: { isActive: true },
-        });
-      }
+      await prisma.academicYearSchool.update({
+        where: { id: prior.id },
+        data: { isActive: options.isActive },
+      });
     } else {
       const created = await prisma.academicYearSchool.create({
         data: {
@@ -149,24 +145,15 @@ export async function createAcademicYear(data: AcademicYearCreateInput) {
         name: input.name,
         startDate: input.startDate,
         endDate: input.endDate,
-        docsDriveFolderId: input.docsDriveFolderId,
       },
     });
-  } else {
-    if (
-      year.startDate.getTime() !== input.startDate.getTime() ||
-      year.endDate.getTime() !== input.endDate.getTime()
-    ) {
-      throw new Error(
-        "An academic year with this name already exists with different dates"
-      );
-    }
-    if (input.docsDriveFolderId) {
-      year = await prisma.academicYear.update({
-        where: { id: year.id },
-        data: { docsDriveFolderId: input.docsDriveFolderId },
-      });
-    }
+  } else if (
+    year.startDate.getTime() !== input.startDate.getTime() ||
+    year.endDate.getTime() !== input.endDate.getTime()
+  ) {
+    throw new Error(
+      "An academic year with this name already exists with different dates"
+    );
   }
 
   const alreadyLinked = await prisma.academicYearSchool.findMany({
@@ -252,7 +239,6 @@ export async function updateAcademicYear(id: string, data: AcademicYearInput) {
       name: input.name,
       startDate: input.startDate,
       endDate: input.endDate,
-      docsDriveFolderId: input.docsDriveFolderId,
     },
   });
 
@@ -336,7 +322,7 @@ export async function getAcademicYears(rawParams: {
 
   const schoolFilter = params.schoolId
     ? { schoolId: params.schoolId }
-    : !user.roles.includes("SUPER_ADMIN")
+    : !user.roles.includes("NIGRA")
       ? { schoolId: { in: user.schoolIds } }
       : {};
 
@@ -387,7 +373,6 @@ export async function getAcademicYears(rawParams: {
       name: year.name,
       startDate: year.startDate,
       endDate: year.endDate,
-      docsDriveFolderId: year.docsDriveFolderId,
       schoolLinks: year.schoolLinks,
       isActive: activeLinks.length > 0,
       activeSchoolNames: activeLinks.map((link) => link.school.code),
@@ -414,11 +399,11 @@ export async function getAcademicYearById(id: string, schoolId?: string) {
   const resolvedSchoolId =
     schoolId ??
     (await getSelectedSchool(user))?.id ??
-    (!user.roles.includes("SUPER_ADMIN") ? user.schoolIds[0] : undefined);
+    (!user.roles.includes("NIGRA") ? user.schoolIds[0] : undefined);
 
   const linkWhere: Prisma.AcademicYearSchoolWhereInput = {
     deletedAt: null,
-    ...(!user.roles.includes("SUPER_ADMIN")
+    ...(!user.roles.includes("NIGRA")
       ? { schoolId: { in: user.schoolIds } }
       : {}),
   };
@@ -458,7 +443,6 @@ export async function getAcademicYearById(id: string, schoolId?: string) {
     name: year.name,
     startDate: year.startDate,
     endDate: year.endDate,
-    docsDriveFolderId: year.docsDriveFolderId,
     linkedSchoolIds: year.schoolLinks.map((link) => link.schoolId),
     schoolId: schoolLink?.schoolId,
     school: schoolLink?.school,
@@ -473,7 +457,7 @@ export async function getAcademicYearFormOptions() {
   const user = await requirePermission("academic-years:read");
 
   const schools = await prisma.school.findMany({
-    where: user.roles.includes("SUPER_ADMIN")
+    where: user.roles.includes("NIGRA")
       ? { deletedAt: null, isActive: true }
       : { id: { in: user.schoolIds }, deletedAt: null, isActive: true },
     orderBy: [{ code: "asc" }, { name: "asc" }],

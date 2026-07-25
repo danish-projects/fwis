@@ -171,9 +171,19 @@ function GlobalLoadingInner({ children }: { children: ReactNode }) {
       if (!anchor) return;
 
       const href = anchor.getAttribute("href");
-      if (!href || href.startsWith("#") || href.startsWith("mailto:") || href.startsWith("tel:")) {
+      if (
+        !href ||
+        href.startsWith("#") ||
+        href.startsWith("mailto:") ||
+        href.startsWith("tel:") ||
+        href.startsWith("blob:") ||
+        href.startsWith("data:") ||
+        href.startsWith("javascript:")
+      ) {
         return;
       }
+      // File downloads (incl. programmatic blob saves) are not page navigations.
+      if (anchor.hasAttribute("download")) return;
       if (anchor.target === "_blank") return;
       if (href.startsWith("http") && !isSameOriginUrl(href)) return;
 

@@ -32,3 +32,40 @@ export const calendarDayUpdateSchema = calendarDayFieldsSchema
   .superRefine(refineLessonPlanNumber);
 
 export type CalendarDayUpdateInput = z.infer<typeof calendarDayUpdateSchema>;
+
+export const calendarBulkGenerateDaySchema = z
+  .object({
+    date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Date must be YYYY-MM-DD"),
+    sessionType: sessionTypeSchema,
+    lessonPlanNumber: z
+      .union([z.number().int().min(1), z.null()])
+      .optional(),
+  })
+  .superRefine(refineLessonPlanNumber);
+
+export const calendarBulkGenerateSchema = z.object({
+  academicYearId: z.string().uuid(),
+  schoolIds: z.array(z.string().uuid()).min(1, "Select at least one school"),
+  days: z
+    .array(calendarBulkGenerateDaySchema)
+    .min(1, "At least one calendar day is required"),
+});
+
+export type CalendarBulkGenerateInput = z.infer<typeof calendarBulkGenerateSchema>;
+
+export const academicYearHolidaySchema = z.object({
+  academicYearId: z.string().uuid(),
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Date must be YYYY-MM-DD"),
+  name: z.string().trim().max(120).optional().or(z.literal("")),
+});
+
+export type AcademicYearHolidayInput = z.infer<typeof academicYearHolidaySchema>;
+
+export const calendarCloneSchema = z.object({
+  academicYearId: z.string().uuid(),
+  targetSchoolIds: z
+    .array(z.string().uuid())
+    .min(1, "Select at least one school"),
+});
+
+export type CalendarCloneInput = z.infer<typeof calendarCloneSchema>;

@@ -10,12 +10,13 @@ import { ClassroomEntryLoading } from "@/components/shared/grade-change-loading"
 import { Button } from "@/components/ui/button";
 import { filterClassroomsForSelectedSchool } from "@/lib/school/filter-classrooms";
 import { getSelectedSchool } from "@/lib/school/resolve-school";
+import { parseAssessmentColumnFilter } from "@/lib/assessments/assessment-column-filter";
 
 export const metadata = { title: "Assessment Scores" };
 
 type PageProps = {
   params: Promise<{ classroomId: string }>;
-  searchParams: Promise<{ year?: string }>;
+  searchParams: Promise<{ year?: string; column?: string }>;
 };
 
 export default async function ClassroomAssessmentsPage({
@@ -25,7 +26,8 @@ export default async function ClassroomAssessmentsPage({
   await requirePermission("assessments:read");
   const user = await getSessionUser();
   const { classroomId } = await params;
-  const { year } = await searchParams;
+  const { year, column } = await searchParams;
+  const initialColumnFilter = parseAssessmentColumnFilter(column);
 
   const [data, classrooms, selectedSchool] = await Promise.all([
     getAssessmentMatrix(classroomId, year),
@@ -54,7 +56,7 @@ export default async function ClassroomAssessmentsPage({
     <div className="space-y-6">
       <div>
         <Button asChild variant="ghost" size="sm" className="mb-2 -ml-2">
-          <Link href="/assessments">← Back to grades</Link>
+          <Link href="/assessments">← Back to assessments</Link>
         </Button>
         <h1 className="text-2xl font-bold md:text-3xl">
           {data.classroom.name} — Assessments
@@ -73,8 +75,10 @@ export default async function ClassroomAssessmentsPage({
         >
           <AssessmentMatrix
             classroomId={classroomId}
+            academicYearId={data.academicYear?.id}
             rows={data.rows}
             columnDates={data.columnDates}
+            initialColumnFilter={initialColumnFilter}
           />
         </AssessmentsClassroomContent>
       </Suspense>

@@ -41,7 +41,7 @@ export function buildEnrollmentEligibleStudentFilter(
     ...studentGenderFilter(user),
   };
 
-  if (user.roles.includes("SUPER_ADMIN")) {
+  if (user.roles.includes("NIGRA")) {
     return {
       ...base,
       OR: [
@@ -81,7 +81,7 @@ export function buildStudentEnrollmentVisibilityFilter(
   enrollmentWhere: Prisma.StudentEnrollmentWhereInput,
   listSchoolId?: string | null
 ): Prisma.StudentWhereInput {
-  if (user.roles.includes("SUPER_ADMIN")) {
+  if (user.roles.includes("NIGRA")) {
     if (listSchoolId) {
       return {
         OR: [
@@ -182,7 +182,7 @@ export function buildStudentListFilter(
 
   const searchWhere = studentSearchWhere(options?.search);
 
-  if (user.roles.includes("SUPER_ADMIN")) {
+  if (user.roles.includes("NIGRA")) {
     if (options?.listSchoolId) {
       return combineStudentWhere(base, searchWhere, {
         OR: [
@@ -207,34 +207,42 @@ export function buildStudentListFilter(
     ? [options.listSchoolId]
     : user.schoolIds;
 
-  if (primaryRole === "SCHOOL_ADMIN" && schoolIds.length > 0) {
-    if (isSectionScopedAdmin(user) && user.classroomIds.length > 0) {
-      return combineStudentWhere(base, searchWhere, {
-        enrollments: {
-          some: {
-            deletedAt: null,
-            classroomId: { in: user.classroomIds },
-          },
-        },
-      });
-    }
-
-    return combineStudentWhere(base, searchWhere, {
-      OR: [
-        {
+  if (
+    primaryRole === "SCHOOL_ADMIN" ||
+    primaryRole === "PRINCIPAL"
+  ) {
+    if (schoolIds.length > 0) {
+      if (isSectionScopedAdmin(user) && user.classroomIds.length > 0) {
+        return combineStudentWhere(base, searchWhere, {
           enrollments: {
             some: {
               deletedAt: null,
-              schoolId: { in: schoolIds },
+              classroomId: { in: user.classroomIds },
             },
           },
-        },
-        unenrolledAtUserSchoolsWhere(schoolIds),
-      ],
-    });
+        });
+      }
+
+      return combineStudentWhere(base, searchWhere, {
+        OR: [
+          {
+            enrollments: {
+              some: {
+                deletedAt: null,
+                schoolId: { in: schoolIds },
+              },
+            },
+          },
+          unenrolledAtUserSchoolsWhere(schoolIds),
+        ],
+      });
+    }
   }
 
-  if (primaryRole === "TEACHER" && user.classroomIds.length > 0) {
+  if (
+    (primaryRole === "TEACHER" || primaryRole === "SUBSTITUTE") &&
+    user.classroomIds.length > 0
+  ) {
     return combineStudentWhere(base, searchWhere, {
       enrollments: {
         some: {
@@ -265,7 +273,7 @@ export async function assertStudentAccess(
   user: AuthUser,
   studentId: string
 ): Promise<boolean> {
-  if (user.roles.includes("SUPER_ADMIN")) return true;
+  if (user.roles.includes("NIGRA")) return true;
 
   const { prisma } = await import("@/lib/prisma");
 
@@ -281,7 +289,7 @@ export async function assertStudentAccess(
     if (unenrolled) return true;
   }
 
-  if (user.roles.includes("SUPER_ADMIN")) {
+  if (user.roles.includes("NIGRA")) {
     const unenrolled = await prisma.student.findFirst({
       where: {
         id: studentId,

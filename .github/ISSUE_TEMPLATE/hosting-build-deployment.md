@@ -48,7 +48,7 @@ This command:
 ## Server requirements
 
 - **Node.js 18+** (20+ recommended)
-- **PostgreSQL** (Supabase — already configured for this project)
+- **PostgreSQL** (SmarterASP.NET — see [docs/SMARTERASP_SETUP.md](../../docs/SMARTERASP_SETUP.md))
 - Shared host must support **long-running Node.js apps** (cPanel Node.js Selector, Passenger, PM2, etc.)
 - **Not** plain PHP/static hosting
 

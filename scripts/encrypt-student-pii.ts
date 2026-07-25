@@ -24,11 +24,19 @@ async function main() {
     select: {
       id: true,
       dateOfBirth: true,
-      parentName: true,
-      parentPhone: true,
-      parentEmail: true,
-      address: true,
+      emailAddress: true,
       emergencyContact: true,
+      streetAddress: true,
+      city: true,
+      stateProvince: true,
+      zipPostalCode: true,
+      country: true,
+      fatherGuardianFirstName: true,
+      fatherGuardianLastName: true,
+      fatherMobileWhatsappNumber: true,
+      motherGuardianFirstName: true,
+      motherGuardianLastName: true,
+      motherMobileWhatsappNumber: true,
     },
   });
 

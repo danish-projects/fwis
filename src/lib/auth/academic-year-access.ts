@@ -4,7 +4,7 @@ export async function assertAcademicYearSchoolAccess(
   user: AuthUser,
   schoolId: string
 ): Promise<void> {
-  if (user.roles.includes("SUPER_ADMIN")) return;
+  if (user.roles.includes("NIGRA")) return;
   if (!user.schoolIds.includes(schoolId)) {
     throw new Error("Unauthorized school access");
   }
@@ -22,7 +22,7 @@ export async function assertAcademicYearRecordAccess(
   if (links.length === 0) throw new Error("Academic year not found");
 
   const schoolIds = links.map((link) => link.schoolId);
-  if (!user.roles.includes("SUPER_ADMIN")) {
+  if (!user.roles.includes("NIGRA")) {
     const allowed = schoolIds.some((id) => user.schoolIds.includes(id));
     if (!allowed) throw new Error("Unauthorized school access");
   }

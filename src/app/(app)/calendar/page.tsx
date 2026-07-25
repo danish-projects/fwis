@@ -7,10 +7,12 @@ import {
 import { getSessionUser, requirePermission } from "@/lib/auth/session";
 import { hasPermission } from "@/lib/auth/permissions";
 import { CalendarBulkGenerate } from "@/components/calendar/calendar-bulk-generate";
+import { CalendarClone } from "@/components/calendar/calendar-clone";
 import { CalendarDaysTable } from "@/components/calendar/calendar-days-table";
 import { CalendarSessionSummary } from "@/components/calendar/calendar-session-summary";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { calendarDateKey } from "@/lib/calendar/calendar-date";
 import { buildSessionTypeCounts, countAttendanceNeededDays } from "@/lib/calendar/session-type-counts";
 
 export const metadata = { title: "Academic Calendar" };
@@ -24,7 +26,7 @@ export default async function CalendarPage() {
   const ctx = await getCalendarPageContext();
   const academicYearId = ctx.academicYearId;
 
-  if (!academicYearId) {
+  if (!academicYearId || !ctx.schoolId || !ctx.startDate || !ctx.endDate) {
     return (
       <div className="space-y-6">
         <div>
@@ -49,12 +51,17 @@ export default async function CalendarPage() {
   const yearData = await getCalendarDays(academicYearId);
   if (!yearData) notFound();
 
+  const holidayNameByDate = new Map(
+    ctx.holidays.map((holiday) => [holiday.date, holiday.name?.trim() || null])
+  );
+
   const days = yearData.calendarDays.map((day) => ({
     id: day.id,
     date: day.date.toISOString(),
     lessonPlanNumber: day.lessonPlanNumber,
     sessionType: day.sessionType,
     attendanceCount: day._count.attendance,
+    holidayName: holidayNameByDate.get(calendarDateKey(day.date)) ?? null,
   }));
   const sessionTypeCounts = buildSessionTypeCounts(yearData.calendarDays);
   const attendanceNeededCount = countAttendanceNeededDays(yearData.calendarDays);
@@ -74,7 +81,30 @@ export default async function CalendarPage() {
               <Button asChild size="sm">
                 <Link href="/calendar/new">Add Day</Link>
               </Button>
-              <CalendarBulkGenerate academicYearId={academicYearId} />
+              <Button asChild size="sm" variant="secondary">
+                <Link href="/calendar/holidays">
+                  Add Holidays
+                  {ctx.holidays.length > 0 ? ` (${ctx.holidays.length})` : ""}
+                </Link>
+              </Button>
+              <CalendarBulkGenerate
+                academicYearId={academicYearId}
+                academicYearName={ctx.academicYearName ?? yearData.name}
+                startDate={ctx.startDate}
+                endDate={ctx.endDate}
+                currentSchoolId={ctx.schoolId}
+                schools={ctx.schools}
+                previewDays={ctx.previewDays}
+                holidayCount={ctx.holidays.length}
+              />
+              <CalendarClone
+                academicYearId={academicYearId}
+                academicYearName={ctx.academicYearName ?? yearData.name}
+                currentSchoolId={ctx.schoolId}
+                currentSchoolName={yearData.school.name}
+                sourceDayCount={ctx.sourceDayCount}
+                schools={ctx.schools}
+              />
             </>
           )}
           <Button asChild variant="outline" size="sm">

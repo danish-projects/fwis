@@ -39,27 +39,29 @@ export function UserForm({
     defaultValues?.gender ?? ""
   );
 
-  const isSuperAdmin = roleCodes.includes("SUPER_ADMIN");
+  const isSuperAdmin = roleCodes.includes("NIGRA");
   const isSchoolAdminOnly =
     roleCodes.length === 1 && roleCodes.includes("SCHOOL_ADMIN");
   const needsSchools =
     roleCodes.includes("SCHOOL_ADMIN") ||
+    roleCodes.includes("PRINCIPAL") ||
     roleCodes.includes("TEACHER") ||
+    roleCodes.includes("SUBSTITUTE") ||
     roleCodes.includes("READ_ONLY");
 
   const visibleSchools = useMemo(() => options.schools, [options.schools]);
 
   function toggleRole(code: UserRoleCode) {
-    if (code === "SUPER_ADMIN") {
+    if (code === "NIGRA") {
       setRoleCodes((prev) =>
-        prev.includes("SUPER_ADMIN") ? [] : ["SUPER_ADMIN"]
+        prev.includes("NIGRA") ? [] : ["NIGRA"]
       );
-      if (!roleCodes.includes("SUPER_ADMIN")) setSchoolIds([]);
+      if (!roleCodes.includes("NIGRA")) setSchoolIds([]);
       return;
     }
 
     setRoleCodes((prev) => {
-      const withoutSuper = prev.filter((r) => r !== "SUPER_ADMIN");
+      const withoutSuper = prev.filter((r) => r !== "NIGRA");
       return withoutSuper.includes(code)
         ? withoutSuper.filter((r) => r !== code)
         : [...withoutSuper, code];
@@ -80,7 +82,7 @@ export function UserForm({
     const password = (form.get("password") as string) || undefined;
 
     await onSubmit({
-      email: form.get("email") as string,
+      userId: form.get("userId") as string,
       fullName: form.get("fullName") as string,
       password: password || undefined,
       roleCodes,
@@ -103,13 +105,15 @@ export function UserForm({
           />
         </div>
         <div className="space-y-2">
-          <Label htmlFor="email">Email *</Label>
+          <Label htmlFor="userId">User ID *</Label>
           <Input
-            id="email"
-            name="email"
-            type="email"
-            defaultValue={defaultValues?.email ?? ""}
+            id="userId"
+            name="userId"
+            type="text"
+            placeholder="hou.b.g1"
+            defaultValue={defaultValues?.userId ?? ""}
             required
+            autoComplete="username"
           />
         </div>
       </div>

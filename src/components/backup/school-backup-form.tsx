@@ -124,8 +124,9 @@ export function SchoolBackupForm({
       <CardHeader>
         <CardTitle>Export settings</CardTitle>
         <CardDescription>
-          Download Excel backups that match the import template. Each academic year exports as
-          its own workbook using student_id references.
+          Download Excel backups for a school academic year (full snapshot including
+          attendance and assessments). Roster import uses a separate Staff + Students
+          template.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
@@ -206,9 +207,12 @@ export function SchoolBackupForm({
         </div>
 
         <div className="rounded-md border border-dashed px-4 py-3 text-sm text-muted-foreground">
-          Workbook sheets: School_Setup, Teachers, Students, Attendance, Assessments,
-          Calendar_Optional. Student references use student_id (e.g.{" "}
-          {selectedSchool ? `${slugify(selectedSchool.city).slice(0, 3).toUpperCase()}-B1` : "HOU-B1"}
+          Workbook sheets: School_Setup, Staff, Students, Attendance, Assessments,
+          Calendar_Optional (backup only — not used by roster import). Student references
+          use student_id (e.g.{" "}
+          {selectedSchool
+            ? `${slugify(selectedSchool.city).slice(0, 3).toUpperCase()}-B1`
+            : "HOU-B1"}
           ), not database UUIDs.
         </div>
 

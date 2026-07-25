@@ -6,7 +6,6 @@ const academicYearBaseSchema = z
     name: z.string().min(4, "Name is required (e.g. 2025-2026)"),
     startDate: z.string().min(1, "Start date is required"),
     endDate: z.string().min(1, "End date is required"),
-    docsDriveFolderId: z.string().optional().or(z.literal("")),
     schoolIds: z.array(z.string().uuid()),
     isActive: z.boolean().default(false),
     generateCalendar: z.boolean().default(false),

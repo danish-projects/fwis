@@ -8,21 +8,12 @@ import {
 } from "./normalize";
 import type { RowRecord } from "./read-workbook";
 
-type StudentRegistry = {
-  byStudentId: Set<string>;
-  byStudentKey: Set<string>;
-};
-
 export type StudentReferenceValidationSummary = {
   explicitStudentIds: number;
   autoAssignedStudents: number;
-  attendanceByStudentId: number;
-  attendanceByLegacy: number;
-  assessmentsByStudentId: number;
-  assessmentsByLegacy: number;
 };
 
-function buildStudentRegistry(students: RowRecord[], cityCode: string): StudentRegistry {
+function buildStudentRegistry(students: RowRecord[], cityCode: string) {
   const byStudentId = new Set<string>();
   const byStudentKey = new Set<string>();
 
@@ -54,99 +45,33 @@ function buildStudentRegistry(students: RowRecord[], cityCode: string): StudentR
   return { byStudentId, byStudentKey };
 }
 
-function hasLegacyStudentColumns(row: RowRecord): boolean {
-  return Boolean(
-    row.student_first_name?.trim() &&
-      row.student_last_name?.trim() &&
-      row.grade?.trim() &&
-      row.section?.trim()
-  );
-}
-
-function validateLinkedRow(
-  row: RowRecord,
-  sheetName: string,
-  rowIndex: number,
-  registry: StudentRegistry
-): "student_id" | "legacy" {
-  const context = `${sheetName} row ${rowIndex + 2}`;
-  const rawStudentId = row.student_id?.trim();
-
-  if (rawStudentId) {
-    const studentId = normalizeStudentId(rawStudentId, `${context} student_id`);
-    if (!registry.byStudentId.has(studentId)) {
-      throw new Error(
-        `${context}: student_id "${studentId}" is not listed on the Students sheet.`
-      );
-    }
-    return "student_id";
-  }
-
-  if (hasLegacyStudentColumns(row)) {
-    const gradeNum = normalizeGrade(row.grade);
-    const sectionName = normalizeSection(row.section);
-    const key = studentKey(
-      row.student_first_name,
-      row.student_last_name,
-      gradeNum,
-      sectionName
-    );
-    if (!registry.byStudentKey.has(key)) {
-      throw new Error(
-        `${context}: student "${row.student_first_name} ${row.student_last_name}" (grade ${gradeNum}, ${sectionName}) is not listed on the Students sheet.`
-      );
-    }
-    return "legacy";
-  }
-
-  throw new Error(
-    `${context}: student_id is required (or use legacy student_first_name, student_last_name, grade, and section).`
-  );
-}
-
-export function validateImportStudentReferences(
+export function validateImportStudents(
   students: RowRecord[],
-  attendance: RowRecord[],
-  assessments: RowRecord[],
   cityCode: string
 ): StudentReferenceValidationSummary {
   const registry = buildStudentRegistry(students, cityCode);
-
-  const summary: StudentReferenceValidationSummary = {
+  return {
     explicitStudentIds: registry.byStudentId.size,
     autoAssignedStudents: students.length - registry.byStudentId.size,
-    attendanceByStudentId: 0,
-    attendanceByLegacy: 0,
-    assessmentsByStudentId: 0,
-    assessmentsByLegacy: 0,
   };
+}
 
-  for (const [index, row] of attendance.entries()) {
-    const method = validateLinkedRow(row, "Attendance", index, registry);
-    if (method === "student_id") summary.attendanceByStudentId++;
-    else summary.attendanceByLegacy++;
-  }
-
-  for (const [index, row] of assessments.entries()) {
-    const method = validateLinkedRow(row, "Assessments", index, registry);
-    if (method === "student_id") summary.assessmentsByStudentId++;
-    else summary.assessmentsByLegacy++;
-  }
-
-  return summary;
+/** @deprecated Use validateImportStudents */
+export function validateImportStudentReferences(
+  students: RowRecord[],
+  _attendance: RowRecord[],
+  _assessments: RowRecord[],
+  cityCode: string
+): StudentReferenceValidationSummary {
+  return validateImportStudents(students, cityCode);
 }
 
 export function formatStudentReferenceValidation(
   summary: StudentReferenceValidationSummary
 ): string {
-  const lines = [
+  return [
     "Student ID validation:",
     `  Students with explicit ID: ${summary.explicitStudentIds}`,
     `  Students auto-assigned on import: ${summary.autoAssignedStudents}`,
-    `  Attendance linked by student_id: ${summary.attendanceByStudentId}`,
-    `  Attendance linked by legacy name: ${summary.attendanceByLegacy}`,
-    `  Assessments linked by student_id: ${summary.assessmentsByStudentId}`,
-    `  Assessments linked by legacy name: ${summary.assessmentsByLegacy}`,
-  ];
-  return lines.join("\n");
+  ].join("\n");
 }
