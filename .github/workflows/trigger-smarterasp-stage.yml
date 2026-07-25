@@ -1,0 +1,23 @@
+name: Trigger SmarterASP stage deploy
+
+# Runs only when `dev` is updated (merge or direct push).
+on:
+  push:
+    branches: [dev]
+  workflow_dispatch: # allow manual "Run workflow" from Actions tab
+
+jobs:
+  trigger:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Call SmarterASP deploy hook
+        env:
+          HOOK_URL: ${{ secrets.SMARTERASP_DEPLOY_HOOK_URL }}
+        run: |
+          if [ -z "$HOOK_URL" ]; then
+            echo "Missing secret SMARTERASP_DEPLOY_HOOK_URL"
+            exit 1
+          fi
+          curl -fsS -X POST "$HOOK_URL"
+          echo
+          echo "Deploy hook called successfully."
