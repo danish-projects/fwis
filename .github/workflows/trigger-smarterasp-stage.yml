@@ -1,16 +1,50 @@
-name: Trigger SmarterASP stage deploy
+name: Version bump and SmarterASP stage deploy
 
-# Runs only when `dev` is updated (merge or direct push).
+# On push to `dev`: bump patch in package.json, then deploy.
+# The version commit uses [skip version] so the follow-up push only deploys
+# (avoids an infinite bump loop). Manual workflow_dispatch deploys without bumping.
 on:
   push:
     branches: [dev]
-  workflow_dispatch: # allow manual "Run workflow" from Actions tab
+  workflow_dispatch:
+
+permissions:
+  contents: write
 
 jobs:
-  trigger:
+  release:
     runs-on: ubuntu-latest
     steps:
-      - name: Call SmarterASP deploy hook
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          # Need full history + push rights for version bump commit
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup Node
+        if: ${{ github.event_name == 'push' && !contains(github.event.head_commit.message, '[skip version]') }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Bump patch version
+        id: bump
+        if: ${{ github.event_name == 'push' && !contains(github.event.head_commit.message, '[skip version]') }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          npm version patch --no-git-tag-version
+          VER=$(node -p "require('./package.json').version")
+          git add package.json package-lock.json
+          git commit -m "[skip version] chore: bump version to ${VER}"
+          git push
+          echo "version=${VER}" >> "$GITHUB_OUTPUT"
+          echo "Bumped to v${VER}"
+
+      - name: Trigger SmarterASP deploy
+        # Deploy after version bump commit, or on manual dispatch / skip-version pushes
+        if: ${{ github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[skip version]') }}
         env:
           HOOK_URL: ${{ secrets.SMARTERASP_DEPLOY_HOOK_URL }}
         run: |
