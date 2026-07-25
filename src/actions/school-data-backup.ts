@@ -15,11 +15,11 @@ import type { AssessmentTypeCode } from "@/lib/setup-types";
 import type { SchoolBackupExportInput } from "@/lib/validations/backup";
 
 export async function getSchoolBackupPageContext(schoolId?: string) {
-  const user = await requireRole("SUPER_ADMIN", "SCHOOL_ADMIN");
+  const user = await requireRole("NIGRA", "SCHOOL_ADMIN");
   await requirePermission("reports:export");
 
   const schools = await prisma.school.findMany({
-    where: user.roles.includes("SUPER_ADMIN")
+    where: user.roles.includes("NIGRA")
       ? { deletedAt: null, isActive: true }
       : { id: { in: user.schoolIds }, deletedAt: null, isActive: true },
     orderBy: { name: "asc" },
@@ -55,14 +55,14 @@ export async function getSchoolBackupPageContext(schoolId?: string) {
     schools,
     schoolId: resolvedSchoolId ?? null,
     academicYears,
-    showSchoolPicker: user.roles.includes("SUPER_ADMIN") || schools.length > 1,
+    showSchoolPicker: user.roles.includes("NIGRA") || schools.length > 1,
   };
 }
 
 export async function buildSchoolYearBackupBuffer(
   input: SchoolBackupExportInput
 ): Promise<{ buffer: Buffer; filename: string }> {
-  const user = await requireRole("SUPER_ADMIN", "SCHOOL_ADMIN");
+  const user = await requireRole("NIGRA", "SCHOOL_ADMIN");
   await requirePermission("reports:export", { schoolId: input.schoolId });
   await assertAcademicYearRecordAccess(user, input.yearId);
 
@@ -90,11 +90,13 @@ export async function buildSchoolYearBackupBuffer(
     academicYear: year.name,
   };
 
-  const teachers = await prisma.teacher.findMany({
+  const staffMembers = await prisma.staff.findMany({
     where: { schoolId: input.schoolId, deletedAt: null, isActive: true },
     include: {
-      classrooms: {
+      assignments: {
+        where: { academicYearSchoolId: schoolLink.id },
         include: {
+          role: { select: { code: true } },
           classroom: {
             include: { grade: true, section: true },
           },
@@ -104,18 +106,26 @@ export async function buildSchoolYearBackupBuffer(
     orderBy: [{ lastName: "asc" }, { firstName: "asc" }],
   });
 
-  const teacherRows = teachers.flatMap((teacher) =>
-    teacher.classrooms.map(({ classroom }) => ({
-      school_city: scope.city,
-      school_state: scope.state,
-      first_name: teacher.firstName,
-      last_name: teacher.lastName,
-      email: teacher.email,
-      phone: teacher.phone ?? "",
-      grade: String(classroom.grade.sortOrder),
-      section: classroom.section.name,
-    }))
-  );
+  const staffRows = staffMembers.flatMap((staff) => {
+    const assignment = staff.assignments[0];
+    if (!assignment?.classroom) return [];
+    return [
+      {
+        school_city: scope.city,
+        school_state: scope.state,
+        academic_year: scope.academicYear,
+        first_name: staff.firstName,
+        last_name: staff.lastName,
+        email: staff.email,
+        phone: staff.phone ?? "",
+        staff_role: assignment.role.code,
+        gender: staff.gender ?? "",
+        grade: String(assignment.classroom.grade.sortOrder),
+        section: assignment.classroom.section.name,
+        user_id: staff.userId ?? "",
+      },
+    ];
+  });
 
   const enrollments = await prisma.studentEnrollment.findMany({
     where: {
@@ -126,7 +136,7 @@ export async function buildSchoolYearBackupBuffer(
     include: {
       student: true,
       classroom: { include: { grade: true, section: true } },
-      teacher: { select: { email: true } },
+      staff: { select: { email: true, userId: true } },
       attendance: {
         where: { deletedAt: null },
         include: { calendarDay: { select: { date: true } } },
@@ -168,12 +178,32 @@ export async function buildSchoolYearBackupBuffer(
       first_name: student.firstName,
       last_name: student.lastName,
       gender: student.gender,
+      email_address: student.emailAddress ?? "",
       grade: String(enrollment.classroom.grade.sortOrder),
       section: enrollment.classroom.section.name,
-      teacher_email: enrollment.teacher?.email ?? "",
-      parent_name: student.parentName ?? "",
-      parent_phone: student.parentPhone ?? "",
-      parent_email: student.parentEmail ?? "",
+      street_address: student.streetAddress ?? "",
+      city: student.city ?? "",
+      state_province: student.stateProvince ?? "",
+      zip_postal_code: student.zipPostalCode ?? "",
+      country: student.country ?? "",
+      father_guardian_first_name: student.fatherGuardianFirstName ?? "",
+      father_guardian_last_name: student.fatherGuardianLastName ?? "",
+      father_parental_responsibility:
+        student.fatherParentalResponsibility == null
+          ? ""
+          : student.fatherParentalResponsibility
+            ? "Yes"
+            : "No",
+      father_mobile_whatsapp_number: student.fatherMobileWhatsappNumber ?? "",
+      mother_guardian_first_name: student.motherGuardianFirstName ?? "",
+      mother_guardian_last_name: student.motherGuardianLastName ?? "",
+      mother_parental_responsibility:
+        student.motherParentalResponsibility == null
+          ? ""
+          : student.motherParentalResponsibility
+            ? "Yes"
+            : "No",
+      mother_mobile_whatsapp_number: student.motherMobileWhatsappNumber ?? "",
       enrollment_date: formatDateForExport(enrollment.enrollmentDate),
     });
 
@@ -211,7 +241,7 @@ export async function buildSchoolYearBackupBuffer(
   const calendarRows = calendarDays.map((day) => ({
     date: formatDateForExport(day.date),
     session_type: day.sessionType,
-    sunday_number: day.lessonPlanNumber != null ? String(day.lessonPlanNumber) : "",
+    lesson_plan_number: day.lessonPlanNumber != null ? String(day.lessonPlanNumber) : "",
   }));
 
   const backupData: SchoolYearBackupData = {
@@ -222,7 +252,7 @@ export async function buildSchoolYearBackupBuffer(
     yearStartDate: formatDateForExport(year.startDate),
     yearEndDate: formatDateForExport(year.endDate),
     exportedAt: new Date().toISOString().slice(0, 10),
-    teachers: teacherRows,
+    staff: staffRows,
     students: studentRows,
     attendance: attendanceRows.sort((a, b) =>
       `${a.student_id}|${a.date}`.localeCompare(`${b.student_id}|${b.date}`)

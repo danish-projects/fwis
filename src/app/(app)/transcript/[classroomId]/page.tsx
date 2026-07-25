@@ -75,6 +75,7 @@ export default async function ClassroomTranscriptPage({
             rows={data.rows}
             gradingScale={data.gradingScale}
             columnDates={data.columnDates}
+            academicYearId={data.academicYear?.id}
           />
         </AssessmentsClassroomContent>
       </Suspense>

@@ -19,6 +19,5 @@ export type AcademicYearSchoolContext = {
     name: string;
     startDate: Date;
     endDate: Date;
-    docsDriveFolderId: string | null;
   };
 };

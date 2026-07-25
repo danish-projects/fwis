@@ -40,8 +40,6 @@ export function AcademicYearForm({
       name: form.get("name") as string,
       startDate: form.get("startDate") as string,
       endDate: form.get("endDate") as string,
-      docsDriveFolderId:
-        (form.get("docsDriveFolderId") as string) || undefined,
       isActive: form.get("isActive") === "on",
       generateCalendar: form.get("generateCalendar") === "on",
     });
@@ -65,6 +63,15 @@ export function AcademicYearForm({
           defaultValue={defaultValues?.name}
           required
         />
+        <p className="text-xs text-muted-foreground">
+          Lesson plans are resolved under FWIS Docs using this name (e.g.{" "}
+          <span className="font-medium text-foreground">
+            FWIS Docs/2025-2026/Lesson Plans
+          </span>
+          ). Set{" "}
+          <code className="text-xs">GOOGLE_DRIVE_FWIS_DOCS_FOLDER_ID</code> in
+          the server environment.
+        </p>
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2">
@@ -86,29 +93,6 @@ export function AcademicYearForm({
             type="date"
             defaultValue={endDate}
             required
-          />
-        </div>
-      </div>
-
-      <div className="space-y-3 rounded-lg border bg-muted/30 p-4">
-        <div>
-          <p className="font-medium">FWIS Docs (Google Drive)</p>
-          <p className="text-sm text-muted-foreground">
-            One folder per academic year under FWIS Docs (e.g.{" "}
-            <span className="font-medium text-foreground">2025-2026</span>).
-            Lesson plans live in{" "}
-            <span className="font-medium text-foreground">Lesson Plans</span>{" "}
-            with a subfolder per grade. Paste the year folder ID from the Drive
-            URL after <code className="text-xs">/folders/</code>.
-          </p>
-        </div>
-        <div className="space-y-2">
-          <Label htmlFor="docsDriveFolderId">Google Drive Folder ID</Label>
-          <Input
-            id="docsDriveFolderId"
-            name="docsDriveFolderId"
-            defaultValue={defaultValues?.docsDriveFolderId ?? ""}
-            placeholder="e.g. 1ABCdefGHIjkLmNoPqRsTuVwXyZ"
           />
         </div>
       </div>
@@ -148,28 +132,26 @@ export function AcademicYearForm({
       </div>
 
       {mode === "create" && (
-        <>
-          <label className="flex items-center gap-2 text-sm">
-            <input
-              type="checkbox"
-              name="isActive"
-              defaultChecked={defaultValues?.isActive ?? false}
-              className="rounded"
-            />
-            Set as active year for selected schools
-          </label>
-
-          <label className="flex items-center gap-2 text-sm">
-            <input
-              type="checkbox"
-              name="generateCalendar"
-              defaultChecked={defaultValues?.generateCalendar ?? true}
-              className="rounded"
-            />
-            Generate Sunday calendar days from date range
-          </label>
-        </>
+        <label className="flex items-center gap-2 text-sm">
+          <input
+            type="checkbox"
+            name="generateCalendar"
+            defaultChecked={defaultValues?.generateCalendar ?? true}
+            className="rounded"
+          />
+          Generate Sunday calendar days from date range
+        </label>
       )}
+
+      <label className="flex items-center gap-2 text-sm">
+        <input
+          type="checkbox"
+          name="isActive"
+          defaultChecked={defaultValues?.isActive ?? false}
+          className="rounded"
+        />
+        Set as active year for selected schools
+      </label>
 
       <div className="flex gap-3 pt-2">
         <Button type="submit">{submitLabel}</Button>

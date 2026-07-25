@@ -16,7 +16,6 @@ const buckets = new Map<string, RateLimitEntry>();
 export const RATE_LIMITS = {
   signIn: { limit: 10, windowMs: 15 * 60 * 1000 },
   loginPage: { limit: 60, windowMs: 15 * 60 * 1000 },
-  authCallback: { limit: 30, windowMs: 15 * 60 * 1000 },
   export: { limit: 10, windowMs: 60 * 60 * 1000 },
 } as const satisfies Record<string, RateLimitConfig>;
 
@@ -68,7 +67,6 @@ function resolveRateLimitConfig(
     return RATE_LIMITS.signIn;
   }
   if (pathname === "/login") return RATE_LIMITS.loginPage;
-  if (pathname === "/auth/callback") return RATE_LIMITS.authCallback;
   if (pathname.startsWith("/api/export/")) return RATE_LIMITS.export;
   return null;
 }

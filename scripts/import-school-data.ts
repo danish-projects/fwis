@@ -1,5 +1,6 @@
 /**
- * Import historical school data from the FWIS Excel template into Supabase/Postgres.
+ * Import Staff + Students roster from the FWIS Excel template.
+ * School, academic year link, and app_users must already exist.
  *
  * Usage:
  *   npm run import:template
@@ -9,34 +10,32 @@
 import { config } from "dotenv";
 import path from "node:path";
 import { createPrismaClient } from "../src/lib/prisma";
-import { generateCalendarDaysForYear } from "../src/lib/calendar/bootstrap-calendar-days";
-import { computeAndSaveEnrollmentGrade } from "../src/lib/grades/compute-enrollment-grade";
-import { SUPER_ADMIN_ID } from "./demo-users";
+import { ensureClassroomForSchool } from "../src/lib/classrooms/ensure-classroom-for-school";
 import {
-  ASSESSMENT_FIELD_MAP,
   assertStudentIdMatchesSchool,
   classroomLabel,
-  normalizeAttendanceStatus,
   normalizeGender,
   normalizeGrade,
   normalizeSection,
-  normalizeSessionType,
   normalizeStudentId,
   parseDate,
-  parseOptionalScore,
-  studentKey,
 } from "./import/normalize";
 import { readImportWorkbook } from "./import/read-workbook";
-import { resolveEnrollmentId } from "./import/resolve-enrollment";
 import { assertAcademicYearScope, assertSchoolScope } from "./import/validate-scope";
 import {
-  validateImportStudentReferences,
+  validateImportStudents,
   formatStudentReferenceValidation,
 } from "./import/validate-student-ids";
 import {
-  validateImportCalendar,
-  formatCalendarValidation,
-} from "./import/validate-calendar";
+  validateImportStaff,
+  validateStudentTeacherCoverage,
+  formatStaffValidation,
+  resolveImportStaffLoginUserId,
+} from "./import/validate-teachers";
+import {
+  validateImportForeignKeys,
+  formatImportFkValidation,
+} from "./import/validate-import-fks";
 import { confirmSchoolYearPurge } from "./import/prompt-confirm";
 import { encryptStudentPiiForDb } from "../src/lib/students/student-pii";
 import {
@@ -50,6 +49,9 @@ import {
   hasExistingSchoolYearData,
   purgeSchoolYearImportData,
 } from "./import/purge-school-year";
+import { requireExistingSchoolYear } from "./import/resolve-school-year";
+import { linkStaffToExistingAppUser } from "./import/ensure-staff-login";
+import { ensureRoleByCode } from "../src/lib/roles/ensure-role";
 
 config({ path: ".env.local" });
 config({ path: ".env" });
@@ -67,6 +69,36 @@ function getArg(name: string): string | undefined {
   return process.argv[index + 1];
 }
 
+function resolveWorkbookScope(data: {
+  staff: Array<Record<string, string>>;
+  students: Array<Record<string, string>>;
+}) {
+  const anchor = data.staff[0] ?? data.students[0];
+  if (!anchor) {
+    throw new Error("Workbook must include at least one Staff or Students row.");
+  }
+
+  const city = anchor.school_city?.trim();
+  const state = anchor.school_state?.trim().toUpperCase();
+  const academicYearName = anchor.academic_year?.trim();
+  if (!city || !state || !academicYearName) {
+    throw new Error(
+      "school_city, school_state, and academic_year are required on every Staff/Students row."
+    );
+  }
+
+  data.staff.forEach((row, i) => {
+    assertSchoolScope(row, "Staff", i + 2, city, state);
+    assertAcademicYearScope(row, "Staff", i + 2, academicYearName);
+  });
+  data.students.forEach((row, i) => {
+    assertSchoolScope(row, "Students", i + 2, city, state);
+    assertAcademicYearScope(row, "Students", i + 2, academicYearName);
+  });
+
+  return { city, state, academicYearName };
+}
+
 async function main() {
   const fileArg = getArg("--file");
   const dryRun = process.argv.includes("--dry-run");
@@ -77,7 +109,7 @@ async function main() {
       "Usage: npm run import:school -- --file <path-to-xlsx> [--dry-run] [--yes]"
     );
     console.error("  --dry-run  Validate file and show counts without writing");
-    console.error("  --yes      Skip prompt and delete existing school/year data");
+    console.error("  --yes      Skip prompt and delete existing school/year roster data");
     process.exit(1);
   }
 
@@ -85,138 +117,80 @@ async function main() {
   console.log(`Reading ${filePath}${dryRun ? " (dry run)" : ""}...\n`);
 
   const data = await readImportWorkbook(filePath);
+  const { city, state, academicYearName } = resolveWorkbookScope(data);
 
-  if (data.schoolSetup.length !== 1) {
+  const { school, schoolLink, academicYear } = await requireExistingSchoolYear(
+    prisma,
+    city,
+    state,
+    academicYearName
+  );
+
+  if (!school.cityCode) {
     throw new Error(
-      `School_Setup must contain exactly one row (found ${data.schoolSetup.length}).`
+      `School ${school.name} is missing city_code. Update the school in the app before importing.`
     );
   }
 
-  const setup = data.schoolSetup[0];
-  const city = setup.city.trim();
-  const state = setup.state.trim().toUpperCase();
-  const academicYearName = setup.academic_year.trim();
-  const yearStart = parseDate(setup.year_start_date, "year_start_date");
-  const yearEnd = parseDate(setup.year_end_date, "year_end_date");
-
-  data.teachers.forEach((row, i) =>
-    assertSchoolScope(row, "Teachers", i + 2, city, state)
+  const expectedCityCode = school.cityCode || deriveCityCode(city);
+  const studentValidation = validateImportStudents(data.students, expectedCityCode);
+  const staffValidation = await validateImportStaff(
+    prisma,
+    data.staff,
+    school.id,
+    school.cityCode
   );
-  data.students.forEach((row, i) => {
-    assertSchoolScope(row, "Students", i + 2, city, state);
-    assertAcademicYearScope(row, "Students", i + 2, academicYearName);
-  });
-  data.attendance.forEach((row, i) => {
-    assertSchoolScope(row, "Attendance", i + 2, city, state);
-    assertAcademicYearScope(row, "Attendance", i + 2, academicYearName);
-  });
-  data.assessments.forEach((row, i) => {
-    assertSchoolScope(row, "Assessments", i + 2, city, state);
-    assertAcademicYearScope(row, "Assessments", i + 2, academicYearName);
+  validateStudentTeacherCoverage(data.staff, data.students);
+
+  const fkValidation = await validateImportForeignKeys(prisma, {
+    schoolId: school.id,
+    schoolName: school.name,
+    academicYearSchoolId: schoolLink.id,
+    academicYearName: academicYear.name,
+    staff: data.staff,
+    students: data.students,
   });
 
-  const expectedCityCode = deriveCityCode(city);
-  const studentValidation = validateImportStudentReferences(
-    data.students,
-    data.attendance,
-    data.assessments,
-    expectedCityCode
-  );
-  const calendarValidation = validateImportCalendar(
-    yearStart,
-    yearEnd,
-    data.calendarOptional,
-    data.attendance,
-    data.assessments,
-    data.students
+  const existingCounts = await countSchoolYearImportData(
+    prisma,
+    school.id,
+    schoolLink.id
   );
 
   console.log("Import summary:");
-  console.log(`  School:        ${setup.school_name} (${city}, ${state})`);
-  console.log(`  Academic year: ${academicYearName}`);
-  console.log(`  Teachers:      ${data.teachers.length}`);
+  console.log(`  School:        ${school.name} (${city}, ${state})`);
+  console.log(`  Academic year: ${academicYear.name}`);
+  console.log(`  Staff:         ${data.staff.length}`);
   console.log(`  Students:      ${data.students.length}`);
-  console.log(`  Attendance:    ${data.attendance.length}`);
-  console.log(`  Assessments:   ${data.assessments.length}`);
-  console.log(`  Calendar rows: ${data.calendarOptional.length} (optional)`);
+  console.log(`  Mode:          ${dryRun ? "DRY RUN (no writes)" : "IMPORT"}`);
+  console.log("");
+  console.log(formatStaffValidation(staffValidation));
   console.log("");
   console.log(formatStudentReferenceValidation(studentValidation));
   console.log("");
-  console.log(formatCalendarValidation(calendarValidation));
+  console.log(formatImportFkValidation(fkValidation));
   console.log("");
 
-  const school = await prisma.school.findFirst({
-    where: { city, state, deletedAt: null },
-  });
-
-  if (!school && !dryRun) {
-    throw new Error(
-      `School not found for ${city}, ${state}. Create the school in FWIS first or check city/state spelling.`
-    );
-  }
-
-  let existingCounts = null;
-  let academicYearId: string | null = null;
-
-  if (school) {
-    const existingYear = await prisma.academicYear.findFirst({
-      where: { schoolId: school.id, name: academicYearName, deletedAt: null },
-      select: { id: true },
-    });
-
-    if (existingYear) {
-      academicYearId = existingYear.id;
-      existingCounts = await countSchoolYearImportData(
-        prisma,
-        school.id,
-        existingYear.id
-      );
-
-      if (hasExistingSchoolYearData(existingCounts)) {
-        console.log("Existing database records for this school + academic year:");
-        console.log(formatSchoolYearCounts(existingCounts));
-        console.log("");
-      }
-    }
+  if (hasExistingSchoolYearData(existingCounts)) {
+    console.log("Existing database records for this school + academic year:");
+    console.log(formatSchoolYearCounts(existingCounts));
+    console.log("");
+  } else {
+    console.log("No existing import data for this school + academic year.");
+    console.log("");
   }
 
   if (dryRun) {
-    if (!school) {
-      console.log(`School not found in database: ${city}, ${state}`);
-    } else if (!existingCounts || !hasExistingSchoolYearData(existingCounts)) {
-      console.log("No existing import data for this school + academic year.");
-    } else {
-      console.log(
-        "Re-import will prompt to delete the records above (this school/year only)."
-      );
-      console.log('Use --yes to skip the prompt: npm run import:school -- --file ... --yes');
-    }
-    console.log("\nDry run complete — all validations passed, no database changes made.");
+    console.log("Dry run complete — all foreign keys validated; no database changes made.");
+    console.log("Re-run without --dry-run to import.");
     return;
   }
 
-  if (!school) {
-    throw new Error(
-      `School not found for ${city}, ${state}. Create the school in FWIS first or check city/state spelling.`
-    );
-  }
-
-  const scopedSchool = school;
-  let schoolCityCode = scopedSchool.cityCode;
-  if (!schoolCityCode) {
-    schoolCityCode = deriveCityCode(scopedSchool.city);
-    await prisma.school.update({
-      where: { id: scopedSchool.id },
-      data: { cityCode: schoolCityCode },
-    });
-  }
-
-  if (existingCounts && hasExistingSchoolYearData(existingCounts) && academicYearId) {
+  if (hasExistingSchoolYearData(existingCounts)) {
     let confirmed = autoConfirm;
-
     if (!confirmed) {
       confirmed = await confirmSchoolYearPurge({
-        schoolName: setup.school_name.trim() || scopedSchool.name,
+        schoolName: school.name,
         city,
         state,
         academicYear: academicYearName,
@@ -232,8 +206,8 @@ async function main() {
     console.log("\nDeleting existing data for this school and academic year only...");
     const purged = await purgeSchoolYearImportData(
       prisma,
-      scopedSchool.id,
-      academicYearId
+      school.id,
+      schoolLink.id
     );
     console.log("Deleted:");
     console.log(formatSchoolYearCounts(purged));
@@ -241,65 +215,6 @@ async function main() {
       console.log(`  Orphan students:  ${purged.orphanStudentsRemoved}`);
     }
     console.log("");
-  }
-
-  let academicYear = await prisma.academicYear.findFirst({
-    where: { schoolId: scopedSchool.id, name: academicYearName, deletedAt: null },
-  });
-
-  if (!academicYear) {
-    academicYear = await prisma.academicYear.create({
-      data: {
-        schoolId: scopedSchool.id,
-        name: academicYearName,
-        startDate: yearStart,
-        endDate: yearEnd,
-        isActive: false,
-      },
-    });
-    console.log(`Created academic year: ${academicYearName}`);
-  }
-
-  if (data.calendarOptional.length > 0) {
-    for (const row of data.calendarOptional) {
-      const date = parseDate(row.date, "calendar date");
-      const sessionType = normalizeSessionType(row.session_type || "INSTRUCTIONAL");
-      const lessonPlanNumber = row.lesson_plan_number
-        ? Number(row.lesson_plan_number)
-        : row.sunday_number
-          ? Number(row.sunday_number)
-          : undefined;
-
-      await prisma.academicCalendarDay.upsert({
-        where: {
-          academicYearId_date: {
-            academicYearId: academicYear.id,
-            date,
-          },
-        },
-        update: {
-          sessionType,
-          ...(lessonPlanNumber != null
-            ? { lessonPlanNumber }
-            : { lessonPlanNumber: null }),
-        },
-        create: {
-          academicYearId: academicYear.id,
-          date,
-          sessionType,
-          lessonPlanNumber: lessonPlanNumber ?? null,
-        },
-      });
-    }
-  } else {
-    const calendarResult = await generateCalendarDaysForYear(
-      academicYear.id,
-      yearStart,
-      yearEnd
-    );
-    console.log(
-      `Calendar days: ${calendarResult.created} created, ${calendarResult.skipped} already existed`
-    );
   }
 
   const grades = await prisma.grade.findMany({ orderBy: { sortOrder: "asc" } });
@@ -312,78 +227,137 @@ async function main() {
     const sectionName = normalizeSection(sectionValue);
     const grade = gradeBySortOrder.get(gradeNum);
     const section = sectionByName.get(sectionName);
-    if (!grade || !section) {
-      throw new Error(`Missing grade/section setup for ${classroomLabel(gradeNum, sectionName)}`);
+    if (!grade) {
+      throw new Error(
+        `Grade "${gradeValue}" (sort_order ${gradeNum}) does not exist. Run npm run db:seed.`
+      );
+    }
+    if (!section) {
+      throw new Error(
+        `Section "${sectionValue}" does not exist. Run npm run db:seed.`
+      );
     }
 
-    return prisma.classroom.upsert({
-      where: {
-        schoolId_gradeId_sectionId: {
-          schoolId: scopedSchool.id,
-          gradeId: grade.id,
-          sectionId: section.id,
-        },
-      },
-      update: { name: classroomLabel(gradeNum, sectionName), isActive: true },
-      create: {
-        schoolId: scopedSchool.id,
-        gradeId: grade.id,
-        sectionId: section.id,
-        name: classroomLabel(gradeNum, sectionName),
-      },
+    const ensured = await ensureClassroomForSchool(prisma, {
+      schoolId: school.id,
+      gradeId: grade.id,
+      sectionId: section.id,
+      name: classroomLabel(gradeNum, sectionName),
+    });
+
+    return prisma.classroom.findUniqueOrThrow({
+      where: { id: ensured.classroomId },
     });
   }
 
-  const teacherByEmail = new Map<string, string>();
+  const staffByClassroom = new Map<string, string>();
+  let staffLoginsLinked = 0;
+  let staffLoginsExisting = 0;
+  let teachersImported = 0;
 
-  for (const row of data.teachers) {
+  for (const [index, row] of data.staff.entries()) {
     const email = row.email.trim().toLowerCase();
-    const classroom = await resolveClassroom(row.grade, row.section);
-    const sectionName = normalizeSection(row.section);
-    const gender = sectionName === "Boys" ? "MALE" : "FEMALE";
+    const firstName = row.first_name.trim();
+    const lastName = row.last_name.trim();
+    const { loginUserId, roleCode, gender } = resolveImportStaffLoginUserId(
+      school.cityCode,
+      row,
+      index + 2
+    );
+    const role = await ensureRoleByCode(prisma, roleCode);
 
-    const teacher = await prisma.teacher.upsert({
+    const isSubstitute = roleCode === "SUBSTITUTE";
+    let classroomId: string | null = null;
+    let classroomKey: string | null = null;
+
+    if (!isSubstitute) {
+      const classroom = await resolveClassroom(row.grade, row.section);
+      classroomId = classroom.id;
+      classroomKey = classroomLabel(
+        normalizeGrade(row.grade),
+        normalizeSection(row.section)
+      );
+    }
+
+    const staff = await prisma.staff.upsert({
       where: {
-        schoolId_email: { schoolId: scopedSchool.id, email },
+        schoolId_email: { schoolId: school.id, email },
       },
       update: {
         gender,
-        firstName: row.first_name.trim(),
-        lastName: row.last_name.trim(),
+        firstName,
+        lastName,
         phone: row.phone?.trim() || null,
         isActive: true,
         deletedAt: null,
       },
       create: {
-        schoolId: scopedSchool.id,
+        schoolId: school.id,
         gender,
-        firstName: row.first_name.trim(),
-        lastName: row.last_name.trim(),
+        firstName,
+        lastName,
         email,
         phone: row.phone?.trim() || null,
       },
     });
 
-    await prisma.teacherClassroom.deleteMany({ where: { teacherId: teacher.id } });
-    await prisma.teacherClassroom.create({
-      data: { teacherId: teacher.id, classroomId: classroom.id },
+    await prisma.staffAssignment.upsert({
+      where: {
+        staffId_academicYearSchoolId: {
+          staffId: staff.id,
+          academicYearSchoolId: schoolLink.id,
+        },
+      },
+      update: {
+        roleId: role.id,
+        classroomId,
+      },
+      create: {
+        staffId: staff.id,
+        academicYearSchoolId: schoolLink.id,
+        roleId: role.id,
+        classroomId,
+      },
     });
 
-    teacherByEmail.set(email, teacher.id);
-  }
-  console.log(`Teachers imported: ${teacherByEmail.size}`);
+    const loginResult = await linkStaffToExistingAppUser(prisma, {
+      staffId: staff.id,
+      loginUserId,
+      email,
+      fullName: `${firstName} ${lastName}`,
+      gender,
+      schoolId: school.id,
+      roleId: role.id,
+    });
+    if (loginResult.linked) staffLoginsLinked++;
+    else staffLoginsExisting++;
 
-  const enrollmentByStudentId = new Map<string, string>();
-  const enrollmentByStudentKey = new Map<string, string>();
+    // Classroom teachers are enrollment targets via student grade + section.
+    if (classroomKey) {
+      staffByClassroom.set(classroomKey, staff.id);
+      teachersImported++;
+    }
+  }
+  console.log(`Staff imported: ${data.staff.length} (${teachersImported} teachers)`);
+  console.log(
+    `Staff logins: ${staffLoginsLinked} linked, ${staffLoginsExisting} already linked`
+  );
+
+  const schoolCityCode = school.cityCode;
+  const defaultEnrollmentDate = academicYear.startDate;
 
   for (const row of data.students) {
-    const gradeNum = normalizeGrade(row.grade);
-    const sectionName = normalizeSection(row.section);
     const gender = normalizeGender(row.gender);
-    const teacherEmail = row.teacher_email.trim().toLowerCase();
-    const teacherId = teacherByEmail.get(teacherEmail);
-    if (!teacherId) {
-      throw new Error(`Unknown teacher_email "${row.teacher_email}" for student ${row.first_name} ${row.last_name}`);
+    const classroomKey = classroomLabel(
+      normalizeGrade(row.grade),
+      normalizeSection(row.section)
+    );
+    const staffId = staffByClassroom.get(classroomKey);
+    if (!staffId) {
+      throw new Error(
+        `No Staff Teacher for ${classroomKey} ` +
+          `(student ${row.first_name} ${row.last_name})`
+      );
     }
 
     const explicitStudentId = row.student_id?.trim()
@@ -404,13 +378,31 @@ async function main() {
         await adoptStudentNumberSequence(tx, studentNumber, gender);
       }
 
+      const parseYesNo = (value: string | undefined): boolean | null => {
+        const normalized = value?.trim().toLowerCase();
+        if (!normalized) return null;
+        if (["yes", "y", "true", "1"].includes(normalized)) return true;
+        if (["no", "n", "false", "0"].includes(normalized)) return false;
+        return null;
+      };
+
       const pii = encryptStudentPiiForDb({
         dateOfBirth: null,
-        parentName: row.parent_name?.trim() || null,
-        parentPhone: row.parent_phone?.trim() || null,
-        parentEmail: row.parent_email?.trim() || null,
-        address: null,
+        emailAddress: row.email_address?.trim() || null,
         emergencyContact: null,
+        streetAddress: row.street_address?.trim() || null,
+        city: row.city?.trim() || null,
+        stateProvince: row.state_province?.trim() || null,
+        zipPostalCode: row.zip_postal_code?.trim() || null,
+        country: row.country?.trim() || null,
+        fatherGuardianFirstName: row.father_guardian_first_name?.trim() || null,
+        fatherGuardianLastName: row.father_guardian_last_name?.trim() || null,
+        fatherMobileWhatsappNumber:
+          row.father_mobile_whatsapp_number?.trim() || null,
+        motherGuardianFirstName: row.mother_guardian_first_name?.trim() || null,
+        motherGuardianLastName: row.mother_guardian_last_name?.trim() || null,
+        motherMobileWhatsappNumber:
+          row.mother_mobile_whatsapp_number?.trim() || null,
       });
       return tx.student.create({
         data: {
@@ -418,112 +410,36 @@ async function main() {
           lastName: row.last_name.trim(),
           gender,
           studentNumber,
-          originSchoolId: scopedSchool.id,
+          originSchoolId: school.id,
+          fatherParentalResponsibility: parseYesNo(
+            row.father_parental_responsibility
+          ),
+          motherParentalResponsibility: parseYesNo(
+            row.mother_parental_responsibility
+          ),
           ...pii,
           enrollmentDate: row.enrollment_date
             ? parseDate(row.enrollment_date, "enrollment_date")
-            : yearStart,
+            : defaultEnrollmentDate,
         },
       });
     });
 
-    const enrollment = await prisma.studentEnrollment.create({
+    await prisma.studentEnrollment.create({
       data: {
         studentId: student.id,
-        schoolId: scopedSchool.id,
-        academicYearId: academicYear.id,
+        schoolId: school.id,
+        academicYearSchoolId: schoolLink.id,
         classroomId: classroom.id,
-        teacherId,
+        staffId,
         status: "ACTIVE",
         enrollmentDate: row.enrollment_date
           ? parseDate(row.enrollment_date, "enrollment_date")
-          : yearStart,
+          : defaultEnrollmentDate,
       },
     });
-
-    enrollmentByStudentId.set(student.studentNumber!, enrollment.id);
-    enrollmentByStudentKey.set(
-      studentKey(row.first_name, row.last_name, gradeNum, sectionName),
-      enrollment.id
-    );
   }
-  console.log(`Students/enrollments imported: ${enrollmentByStudentId.size}`);
-
-  const enrollmentMaps = {
-    byStudentId: enrollmentByStudentId,
-    byStudentKey: enrollmentByStudentKey,
-  };
-
-  const calendarDays = await prisma.academicCalendarDay.findMany({
-    where: { academicYearId: academicYear.id, deletedAt: null },
-  });
-  const calendarByDate = new Map(
-    calendarDays.map((d) => [d.date.toISOString().slice(0, 10), d.id])
-  );
-
-  let attendanceCount = 0;
-  for (const [index, row] of data.attendance.entries()) {
-    const enrollmentId = resolveEnrollmentId(
-      enrollmentMaps,
-      row,
-      `Attendance row ${index + 2}`
-    );
-
-    const dateKey = parseDate(row.date, "attendance date").toISOString().slice(0, 10);
-    const calendarDayId = calendarByDate.get(dateKey);
-    if (!calendarDayId) {
-      throw new Error(`No calendar day for attendance date ${dateKey}. Add it to Calendar_Optional or extend the academic year.`);
-    }
-
-    await prisma.attendance.upsert({
-      where: {
-        enrollmentId_calendarDayId: { enrollmentId, calendarDayId },
-      },
-      update: {
-        status: normalizeAttendanceStatus(row.status),
-        recordedById: SUPER_ADMIN_ID,
-      },
-      create: {
-        enrollmentId,
-        calendarDayId,
-        status: normalizeAttendanceStatus(row.status),
-        recordedById: SUPER_ADMIN_ID,
-      },
-    });
-    attendanceCount++;
-  }
-  console.log(`Attendance records imported: ${attendanceCount}`);
-
-  let assessmentCount = 0;
-  for (const [index, row] of data.assessments.entries()) {
-    const enrollmentId = resolveEnrollmentId(
-      enrollmentMaps,
-      row,
-      `Assessments row ${index + 2}`
-    );
-
-    for (const { column, type } of ASSESSMENT_FIELD_MAP) {
-      const score = parseOptionalScore(row[column]);
-      if (score == null) continue;
-
-      await prisma.assessmentScore.upsert({
-        where: {
-          enrollmentId_type: { enrollmentId, type },
-        },
-        update: { score, recordedById: SUPER_ADMIN_ID },
-        create: {
-          enrollmentId,
-          type,
-          score,
-          recordedById: SUPER_ADMIN_ID,
-        },
-      });
-      assessmentCount++;
-    }
-
-    await computeAndSaveEnrollmentGrade(enrollmentId);
-  }
-  console.log(`Assessment scores imported: ${assessmentCount}`);
+  console.log(`Students/enrollments imported: ${data.students.length}`);
   console.log("\nImport complete.");
 }
 

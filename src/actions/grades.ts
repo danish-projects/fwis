@@ -13,13 +13,18 @@ import {
   buildClassroomListWhere,
   isSectionScopedAdmin,
 } from "@/lib/auth/section-scope";
-import { sectionNameForGender } from "@/lib/teachers/gender-section";
+import { sectionNameForGender } from "@/lib/staff/gender-section";
 import { getSelectedAcademicYear, resolveAcademicYearForSchool } from "@/lib/academic-year/resolve-year";
 import { resolveListSchoolId } from "@/lib/school/resolve-school";
 import {
+  ensureClassroomForSchool,
+} from "@/lib/classrooms/ensure-classroom-for-school";
+import {
   gradeRecordSchema,
+  bulkGradeRecordSchema,
   gradeRecordListSchema,
   type GradeRecordInput,
+  type BulkGradeRecordInput,
 } from "@/lib/validations/grade-record";
 
 async function resolveGradeName(
@@ -67,41 +72,111 @@ export async function createGradeRecord(data: GradeRecordInput) {
     }
   }
 
-  const existing = await prisma.classroom.findFirst({
-    where: {
-      schoolId: input.schoolId,
-      gradeId: input.gradeId,
-      sectionId: input.sectionId,
-      deletedAt: null,
-    },
+  const name = await resolveGradeName(input.gradeId, input.sectionId, input.name);
+
+  const ensured = await ensureClassroomForSchool(prisma, {
+    schoolId: input.schoolId,
+    gradeId: input.gradeId,
+    sectionId: input.sectionId,
+    name,
+    isActive: input.isActive,
   });
-  if (existing) {
+
+  if (!ensured.createdLink) {
     throw new Error("This grade and section already exists for the selected school");
   }
 
-  const name = await resolveGradeName(input.gradeId, input.sectionId, input.name);
-
-  const record = await prisma.classroom.create({
-    data: {
-      schoolId: input.schoolId,
-      gradeId: input.gradeId,
-      sectionId: input.sectionId,
-      name,
-      isActive: input.isActive,
-    },
+  const record = await prisma.classroom.findFirstOrThrow({
+    where: { id: ensured.classroomId },
   });
 
   await createAuditLog({
     userId: user.id,
-    schoolId: record.schoolId,
+    schoolId: input.schoolId,
     entity: "Classroom",
     entityId: record.id,
     action: "CREATE",
-    newValues: record as unknown as Prisma.InputJsonValue,
+    newValues: {
+      ...record,
+      schoolId: input.schoolId,
+      classroomSchoolId: ensured.classroomSchoolId,
+    } as unknown as Prisma.InputJsonValue,
   });
 
   revalidatePath("/grades");
-  return record;
+  return { ...record, schoolId: input.schoolId };
+}
+
+export async function createGradeRecordsBulk(data: BulkGradeRecordInput) {
+  const user = await requirePermission("classrooms:create");
+  const parsed = bulkGradeRecordSchema.parse(data);
+  await assertGradeRecordSchoolAccess(user, parsed.schoolId);
+
+  let allowedSectionId: number | null = null;
+  if (isSectionScopedAdmin(user) && user.gender) {
+    const expectedSection = sectionNameForGender(user.gender);
+    const section = await prisma.section.findFirst({
+      where: { name: expectedSection },
+    });
+    if (!section) {
+      throw new Error(`Section "${expectedSection}" was not found. Run db:seed.`);
+    }
+    allowedSectionId = section.id;
+    for (const pair of parsed.pairs) {
+      if (pair.sectionId !== allowedSectionId) {
+        throw new Error(
+          user.gender === "MALE"
+            ? "You can only create Boys grades"
+            : "You can only create Girls grades"
+        );
+      }
+    }
+  }
+
+  const created: Array<{ id: string; name: string; schoolId: string }> = [];
+  const skipped: string[] = [];
+
+  for (const pair of parsed.pairs) {
+    const name = await resolveGradeName(pair.gradeId, pair.sectionId);
+    const ensured = await ensureClassroomForSchool(prisma, {
+      schoolId: parsed.schoolId,
+      gradeId: pair.gradeId,
+      sectionId: pair.sectionId,
+      name,
+      isActive: parsed.isActive,
+    });
+
+    if (!ensured.createdLink) {
+      skipped.push(name);
+      continue;
+    }
+
+    const record = await prisma.classroom.findFirstOrThrow({
+      where: { id: ensured.classroomId },
+    });
+
+    await createAuditLog({
+      userId: user.id,
+      schoolId: parsed.schoolId,
+      entity: "Classroom",
+      entityId: record.id,
+      action: "CREATE",
+      newValues: {
+        ...record,
+        schoolId: parsed.schoolId,
+        classroomSchoolId: ensured.classroomSchoolId,
+      } as unknown as Prisma.InputJsonValue,
+    });
+
+    created.push({
+      id: record.id,
+      name: record.name,
+      schoolId: parsed.schoolId,
+    });
+  }
+
+  revalidatePath("/grades");
+  return { created, skipped };
 }
 
 export async function updateGradeRecord(id: string, data: GradeRecordInput) {
@@ -127,79 +202,108 @@ export async function updateGradeRecord(id: string, data: GradeRecordInput) {
     }
   }
 
-  const duplicate = await prisma.classroom.findFirst({
-    where: {
-      schoolId: input.schoolId,
-      gradeId: input.gradeId,
-      sectionId: input.sectionId,
-      deletedAt: null,
-      id: { not: id },
-    },
-  });
-  if (duplicate) {
-    throw new Error("This grade and section already exists for the selected school");
-  }
-
   const before = await prisma.classroom.findUnique({ where: { id } });
   if (!before || before.deletedAt) throw new Error("Grade not found");
 
   const name = await resolveGradeName(input.gradeId, input.sectionId, input.name);
 
+  const ensured = await ensureClassroomForSchool(prisma, {
+    schoolId: input.schoolId,
+    gradeId: input.gradeId,
+    sectionId: input.sectionId,
+    name,
+    isActive: input.isActive,
+  });
+
+  if (ensured.classroomId !== id && !ensured.createdLink) {
+    throw new Error("This grade and section already exists for the selected school");
+  }
+
+  if (ensured.classroomId !== id) {
+    await prisma.classroomSchool.updateMany({
+      where: { classroomId: id, schoolId, deletedAt: null },
+      data: { deletedAt: new Date(), isActive: false },
+    });
+  }
+
   const record = await prisma.classroom.update({
-    where: { id },
+    where: { id: ensured.classroomId },
     data: {
-      gradeId: input.gradeId,
-      sectionId: input.sectionId,
       name,
       isActive: input.isActive,
     },
   });
 
+  await prisma.classroomSchool.updateMany({
+    where: { classroomId: ensured.classroomId, schoolId },
+    data: { isActive: input.isActive, deletedAt: null },
+  });
+
   await createAuditLog({
     userId: user.id,
-    schoolId: record.schoolId,
+    schoolId,
     entity: "Classroom",
     entityId: record.id,
     action: "UPDATE",
     oldValues: before as unknown as Prisma.InputJsonValue,
-    newValues: record as unknown as Prisma.InputJsonValue,
+    newValues: {
+      ...record,
+      schoolId,
+    } as unknown as Prisma.InputJsonValue,
   });
 
   revalidatePath("/grades");
   revalidatePath(`/grades/${id}`);
-  return record;
+  if (ensured.classroomId !== id) {
+    revalidatePath(`/grades/${ensured.classroomId}`);
+  }
+  return { ...record, schoolId };
 }
 
 export async function deleteGradeRecord(id: string) {
   const user = await requirePermission("classrooms:delete");
-  await assertGradeRecordAccess(user, id);
+  const { schoolId } = await assertGradeRecordAccess(user, id);
 
   const before = await prisma.classroom.findUnique({ where: { id } });
   if (!before || before.deletedAt) throw new Error("Grade not found");
 
   const enrollmentCount = await prisma.studentEnrollment.count({
-    where: { classroomId: id, deletedAt: null, status: "ACTIVE" },
+    where: {
+      classroomId: id,
+      schoolId,
+      deletedAt: null,
+      status: "ACTIVE",
+    },
   });
   if (enrollmentCount > 0) {
     throw new Error("Cannot delete a grade with active enrollments");
   }
 
-  const record = await prisma.classroom.update({
-    where: { id },
+  const link = await prisma.classroomSchool.findFirst({
+    where: { classroomId: id, schoolId, deletedAt: null },
+  });
+  if (!link) throw new Error("Grade not found for this school");
+
+  await prisma.classroomSchool.update({
+    where: { id: link.id },
     data: { deletedAt: new Date(), isActive: false },
   });
 
   await createAuditLog({
     userId: user.id,
-    schoolId: record.schoolId,
+    schoolId,
     entity: "Classroom",
-    entityId: record.id,
+    entityId: id,
     action: "DELETE",
-    oldValues: before as unknown as Prisma.InputJsonValue,
+    oldValues: {
+      ...before,
+      schoolId,
+      classroomSchoolId: link.id,
+    } as unknown as Prisma.InputJsonValue,
   });
 
   revalidatePath("/grades");
-  return record;
+  return { ...before, schoolId, deletedAt: new Date(), isActive: false };
 }
 
 export async function getGradeRecords(rawParams: {
@@ -217,7 +321,9 @@ export async function getGradeRecords(rawParams: {
   const where: Prisma.ClassroomWhereInput = {
     ...buildClassroomListWhere(
       user,
-      listSchoolId ? { schoolId: listSchoolId } : { schoolId: "00000000-0000-0000-0000-000000000000" }
+      listSchoolId
+        ? { schoolId: listSchoolId }
+        : { schoolId: "00000000-0000-0000-0000-000000000000" }
     ),
     ...(search
       ? {
@@ -230,20 +336,39 @@ export async function getGradeRecords(rawParams: {
       : {}),
   };
 
+  const linkSchoolFilter = listSchoolId
+    ? { schoolId: listSchoolId, deletedAt: null as Date | null }
+    : user.roles.includes("NIGRA")
+      ? { deletedAt: null as Date | null }
+      : { schoolId: { in: user.schoolIds }, deletedAt: null as Date | null };
+
   const records = await prisma.classroom.findMany({
     where,
-    orderBy: [{ school: { name: "asc" } }, { grade: { sortOrder: "asc" } }, { name: "asc" }],
+    orderBy: [{ grade: { sortOrder: "asc" } }, { name: "asc" }],
     skip: (params.page - 1) * params.pageSize,
     take: params.pageSize,
     include: {
-      school: { select: { id: true, name: true } },
+      schoolLinks: {
+        where: linkSchoolFilter,
+        include: { school: { select: { id: true, name: true } } },
+      },
       grade: true,
       section: true,
-      teachers: { include: { teacher: { select: { firstName: true, lastName: true } } } },
     },
   });
 
-  const schoolIds = [...new Set(records.map((r) => r.schoolId))];
+  const mapped = records.map((r) => {
+    const link = r.schoolLinks[0];
+    return {
+      ...r,
+      schoolId: link?.schoolId ?? listSchoolId ?? "",
+      school: link?.school ?? { id: "", name: "" },
+    };
+  });
+
+  const schoolIds = [
+    ...new Set(mapped.map((r) => r.schoolId).filter(Boolean)),
+  ];
   const yearBySchool = new Map<string, string>();
   for (const sid of schoolIds) {
     const year = await resolveAcademicYearForSchool(sid, selectedYear);
@@ -251,12 +376,32 @@ export async function getGradeRecords(rawParams: {
   }
 
   const yearIds = [...new Set(yearBySchool.values())];
+  const assignments =
+    yearIds.length > 0 && mapped.length > 0
+      ? await prisma.staffAssignment.findMany({
+          where: {
+            classroomId: { in: mapped.map((r) => r.id) },
+            academicYearSchoolId: { in: yearIds },
+          },
+          include: {
+            staff: { select: { firstName: true, lastName: true } },
+          },
+        })
+      : [];
+  const staffByClassroom = new Map<string, typeof assignments>();
+  for (const assignment of assignments) {
+    if (!assignment.classroomId) continue;
+    const list = staffByClassroom.get(assignment.classroomId) ?? [];
+    list.push(assignment);
+    staffByClassroom.set(assignment.classroomId, list);
+  }
+
   const enrollmentCounts =
     yearIds.length > 0
       ? await prisma.studentEnrollment.groupBy({
           by: ["classroomId"],
           where: {
-            classroomId: { in: records.map((r) => r.id) },
+            classroomId: { in: mapped.map((r) => r.id) },
             academicYearSchoolId: { in: yearIds },
             deletedAt: null,
             status: "ACTIVE",
@@ -268,8 +413,9 @@ export async function getGradeRecords(rawParams: {
     enrollmentCounts.map((c) => [c.classroomId, c._count._all])
   );
 
-  const data = records.map((r) => ({
+  const data = mapped.map((r) => ({
     ...r,
+    staff: (staffByClassroom.get(r.id) ?? []).map((a) => ({ staff: a.staff })),
     _count: { enrollments: countMap.get(r.id) ?? 0 },
   }));
 
@@ -288,25 +434,36 @@ export async function getGradeRecords(rawParams: {
 
 export async function getGradeRecordById(id: string) {
   const user = await requirePermission("classrooms:read");
-  await assertGradeRecordAccess(user, id);
+  const { schoolId } = await assertGradeRecordAccess(user, id);
 
   const selectedYear = await getSelectedAcademicYear(user);
+  const schoolYear = await resolveAcademicYearForSchool(schoolId, selectedYear);
+
   const record = await prisma.classroom.findFirst({
     where: { id, deletedAt: null },
     include: {
-      school: true,
+      schoolLinks: {
+        where: { schoolId, deletedAt: null },
+        include: { school: true },
+      },
       grade: true,
       section: true,
-      teachers: {
+      assignments: {
+        where: schoolYear
+          ? { academicYearSchoolId: schoolYear.id }
+          : { id: "00000000-0000-0000-0000-000000000000" },
         include: {
-          teacher: { select: { id: true, firstName: true, lastName: true, email: true } },
+          staff: {
+            select: { id: true, firstName: true, lastName: true, email: true },
+          },
         },
       },
     },
   });
   if (!record) return null;
 
-  const schoolYear = await resolveAcademicYearForSchool(record.schoolId, selectedYear);
+  const school = record.schoolLinks[0]?.school ?? null;
+
   const enrollmentCount = schoolYear
     ? await prisma.studentEnrollment.count({
         where: {
@@ -318,7 +475,13 @@ export async function getGradeRecordById(id: string) {
       })
     : 0;
 
-  return { ...record, enrollmentCount };
+  return {
+    ...record,
+    schoolId,
+    school,
+    staff: record.assignments.map((a) => ({ staff: a.staff })),
+    enrollmentCount,
+  };
 }
 
 export async function getGradeRecordFormOptions(schoolId?: string) {
@@ -330,10 +493,8 @@ export async function getGradeRecordFormOptions(schoolId?: string) {
       where: {
         deletedAt: null,
         isActive: true,
-        ...(user.roles.includes("SUPER_ADMIN")
-          ? listSchoolId
-            ? { id: listSchoolId }
-            : { id: "00000000-0000-0000-0000-000000000000" }
+        ...(user.roles.includes("NIGRA")
+          ? {}
           : { id: { in: user.schoolIds } }),
       },
       orderBy: { name: "asc" },
@@ -344,6 +505,40 @@ export async function getGradeRecordFormOptions(schoolId?: string) {
   ]);
 
   const defaultSchoolId = listSchoolId ?? schools[0]?.id ?? null;
+  const existingSchoolId = schoolId ?? defaultSchoolId;
 
-  return { schools, grades, sections, defaultSchoolId };
+  let existingPairs: Array<{ gradeId: number; sectionId: number }> = [];
+  if (existingSchoolId) {
+    const links = await prisma.classroomSchool.findMany({
+      where: {
+        schoolId: existingSchoolId,
+        deletedAt: null,
+        isActive: true,
+        classroom: { deletedAt: null },
+      },
+      select: {
+        classroom: { select: { gradeId: true, sectionId: true } },
+      },
+    });
+    existingPairs = links.map((link) => ({
+      gradeId: link.classroom.gradeId,
+      sectionId: link.classroom.sectionId,
+    }));
+  }
+
+  const allowedSectionName =
+    isSectionScopedAdmin(user) && user.gender
+      ? sectionNameForGender(user.gender)
+      : null;
+  const visibleSections = allowedSectionName
+    ? sections.filter((section) => section.name === allowedSectionName)
+    : sections;
+
+  return {
+    schools,
+    grades,
+    sections: visibleSections,
+    defaultSchoolId,
+    existingPairs,
+  };
 }

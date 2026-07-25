@@ -2,10 +2,7 @@ import type { AttendanceStatus } from "@/lib/setup-types";
 import { asAttendanceStatus, asSessionType } from "@/lib/setup-types";
 import { prisma } from "@/lib/prisma";
 import { ATTENDANCE_MARKABLE_SESSION_TYPES } from "@/lib/grades/attendance-percentage";
-import {
-  formatLessonPlanLabel,
-  lessonPlanSessionKey,
-} from "@/lib/calendar/lesson-plan";
+import { formatLessonPlanLabel } from "@/lib/calendar/lesson-plan";
 import { SESSION_TYPE_LABELS } from "@/lib/calendar/generate-sundays";
 import { selectDefaultCalendarDayId } from "@/lib/calendar/select-default-day";
 import { formatDate } from "@/lib/utils";
@@ -180,7 +177,7 @@ export async function getDashboardAttendanceWidgetData(
   >();
   for (const ctx of schoolContexts) {
     for (const day of ctx.calendarDays) {
-      const sessionKey = lessonPlanSessionKey(day.lessonPlanNumber, day.id);
+      const sessionKey = day.id;
       if (!sessionMap.has(sessionKey)) {
         sessionMap.set(sessionKey, {
           sessionKey,
@@ -193,19 +190,15 @@ export async function getDashboardAttendanceWidgetData(
   }
 
   const orderedSessions = [...sessionMap.values()].sort(
-    (a, b) => a.sortOrder - b.sortOrder || a.date.getTime() - b.date.getTime()
+    (a, b) => a.date.getTime() - b.date.getTime() || a.sortOrder - b.sortOrder
   );
 
   let defaultSessionKey = orderedSessions[0]?.sessionKey;
   const referenceDays = schoolContexts.find((c) => c.calendarDays.length > 0)?.calendarDays ?? [];
   if (referenceDays.length > 0) {
     const defaultId = selectDefaultCalendarDayId(referenceDays);
-    const defaultDay = referenceDays.find((d) => d.id === defaultId);
-    if (defaultDay) {
-      defaultSessionKey = lessonPlanSessionKey(
-        defaultDay.lessonPlanNumber,
-        defaultDay.id
-      );
+    if (defaultId) {
+      defaultSessionKey = defaultId;
     }
   }
 
@@ -274,13 +267,7 @@ export async function getDashboardAttendanceWidgetData(
       for (const record of enrollment.attendance) {
         if (!markableDayIds.has(record.calendarDayId)) continue;
 
-        const day = ctx.calendarDays.find((d) => d.id === record.calendarDayId);
-        if (!day) continue;
-
-        const sessionKeysForRecord = [
-          ALL_SESSIONS_KEY,
-          lessonPlanSessionKey(day.lessonPlanNumber, day.id),
-        ];
+        const sessionKeysForRecord = [ALL_SESSIONS_KEY, record.calendarDayId];
 
         for (const sessionKey of sessionKeysForRecord) {
           for (const sectionKey of targetSectionKeys) {

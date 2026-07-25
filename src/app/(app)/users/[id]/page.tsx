@@ -24,9 +24,9 @@ export default async function UserDetailPage({ params }: PageProps) {
             <Link href="/users">← Back to users</Link>
           </Button>
           <h1 className="text-2xl font-bold md:text-3xl">
-            {user.fullName ?? user.email}
+            {user.fullName ?? user.userId}
           </h1>
-          <p className="text-muted-foreground">{user.email}</p>
+          <p className="text-muted-foreground">{user.userId}</p>
         </div>
         <Button asChild>
           <Link href={`/users/${user.id}/edit`}>Edit</Link>
@@ -69,22 +69,31 @@ export default async function UserDetailPage({ params }: PageProps) {
         </CardContent>
       </Card>
 
-      {user.teacher && (
+      {user.staff && (
         <Card>
           <CardHeader>
-            <CardTitle>Linked Teacher</CardTitle>
+            <CardTitle>Linked Staff</CardTitle>
           </CardHeader>
           <CardContent>
             <p className="font-medium">
-              {user.teacher.firstName} {user.teacher.lastName}
+              {user.staff.firstName} {user.staff.lastName}
             </p>
             <p className="text-sm text-muted-foreground">
-              {user.teacher.school.name}
-              {user.teacher.classrooms.length > 0 &&
-                ` · ${user.teacher.classrooms.map((c) => c.classroom.name).join(", ")}`}
+              {user.staff.school.name}
+              {user.staff.assignments.length > 0 &&
+                ` · ${user.staff.assignments
+                  .map((a) => {
+                    const year = a.academicYearSchool.academicYear.name;
+                    const grade = a.classroom?.name;
+                    const role = a.role.name;
+                    return grade
+                      ? `${year}: ${role} · ${grade}`
+                      : `${year}: ${role}`;
+                  })
+                  .join("; ")}`}
             </p>
             <Button asChild variant="link" className="mt-2 h-auto p-0">
-              <Link href={`/teachers/${user.teacher.id}`}>View teacher profile</Link>
+              <Link href={`/staff/${user.staff.id}`}>View staff profile</Link>
             </Button>
           </CardContent>
         </Card>

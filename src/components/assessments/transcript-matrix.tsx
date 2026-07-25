@@ -1,6 +1,8 @@
 "use client";
 
 import { Fragment, useMemo, useState } from "react";
+import Link from "next/link";
+import { ChevronDown } from "lucide-react";
 import { AssessmentColumnFilterSelect } from "@/components/assessments/assessment-column-filter-select";
 import { StudentNameWithGender } from "@/components/students/student-name-with-gender";
 import type { GenderCode } from "@/lib/setup-types";
@@ -11,35 +13,37 @@ import { getFinalGradeBreakdown } from "@/lib/grades/calculate-final-grade";
 import { TranscriptGradeGuide } from "@/components/assessments/transcript-grade-guide";
 import {
   ALL_ASSESSMENT_COLUMNS_VALUE,
-  getVisibleTranscriptQuizColumns,
-  TRANSCRIPT_COLUMN_FILTER_OPTIONS,
+  ASSESSMENT_COLUMN_FILTER_OPTIONS,
+  getVisibleAssessmentColumns,
   type AssessmentColumnFilter,
 } from "@/lib/assessments/assessment-column-filter";
 import { ASSESSMENT_TYPE_LABELS } from "@/lib/validations/enrollment";
-import { formatPercent } from "@/lib/utils";
+import { cn, formatPercent } from "@/lib/utils";
 
 type TranscriptMatrixProps = {
   rows: TranscriptMatrixRow[];
   gradingScale: GradingScaleConfig;
   columnDates?: AssessmentColumnDates;
+  academicYearId?: string | null;
 };
 
 export function TranscriptMatrix({
   rows,
   gradingScale,
   columnDates = {},
+  academicYearId,
 }: TranscriptMatrixProps) {
   const [expandedRowId, setExpandedRowId] = useState<string | null>(null);
   const [columnFilter, setColumnFilter] = useState<AssessmentColumnFilter>(
     ALL_ASSESSMENT_COLUMNS_VALUE
   );
 
-  const visibleQuizColumns = useMemo(
-    () => getVisibleTranscriptQuizColumns(columnFilter),
+  const visibleAssessmentColumns = useMemo(
+    () => getVisibleAssessmentColumns(columnFilter),
     [columnFilter]
   );
 
-  const columnCount = visibleQuizColumns.length + 5;
+  const columnCount = visibleAssessmentColumns.length + 5;
 
   return (
     <div className="space-y-4">
@@ -49,8 +53,8 @@ export function TranscriptMatrix({
         <AssessmentColumnFilterSelect
           value={columnFilter}
           onChange={setColumnFilter}
-          label="Show quiz"
-          options={TRANSCRIPT_COLUMN_FILTER_OPTIONS}
+          label="Show assessments"
+          options={ASSESSMENT_COLUMN_FILTER_OPTIONS}
         />
       </div>
 
@@ -67,7 +71,7 @@ export function TranscriptMatrix({
               <th className="min-w-[4rem] px-1 py-2 font-medium whitespace-nowrap sm:px-2 sm:py-3">
                 Behavior
               </th>
-              {visibleQuizColumns.map((type) => (
+              {visibleAssessmentColumns.map((type) => (
                 <th
                   key={type}
                   className="min-w-[3.5rem] px-1 py-2 font-medium whitespace-nowrap sm:min-w-[4.5rem] sm:px-2 sm:py-3"
@@ -100,20 +104,40 @@ export function TranscriptMatrix({
                 <Fragment key={row.enrollmentId}>
                   <tr className="border-b last:border-0">
                     <td className="sticky left-0 z-10 bg-background px-2 py-1.5 font-medium sm:px-3 sm:py-2">
-                      <button
-                        type="button"
-                        className="text-left hover:underline"
-                        title="Show calculation breakdown"
-                        onClick={() =>
-                          setExpandedRowId(isExpanded ? null : row.enrollmentId)
-                        }
-                      >
-                        <StudentNameWithGender
-                          name={row.studentName}
-                          gender={row.gender as GenderCode | string}
-                          studentNumber={row.studentNumber}
-                        />
-                      </button>
+                      <div className="flex items-start gap-1">
+                        <Link
+                          href={
+                            academicYearId
+                              ? `/students/${row.studentId}/profile?year=${academicYearId}`
+                              : `/students/${row.studentId}/profile`
+                          }
+                          className="min-w-0 text-left hover:underline"
+                          title="Open student profile"
+                        >
+                          <StudentNameWithGender
+                            name={row.studentName}
+                            gender={row.gender as GenderCode | string}
+                            studentNumber={row.studentNumber}
+                          />
+                        </Link>
+                        <button
+                          type="button"
+                          className="mt-0.5 shrink-0 rounded p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground"
+                          title="Show calculation breakdown"
+                          aria-expanded={isExpanded}
+                          aria-label={`Show calculation for ${row.studentName}`}
+                          onClick={() =>
+                            setExpandedRowId(isExpanded ? null : row.enrollmentId)
+                          }
+                        >
+                          <ChevronDown
+                            className={cn(
+                              "size-4 transition-transform",
+                              isExpanded && "rotate-180"
+                            )}
+                          />
+                        </button>
+                      </div>
                     </td>
                     <td className="px-1 py-1.5 tabular-nums text-muted-foreground sm:px-2 sm:py-2">
                       {formatPercent(row.attendancePct)}
@@ -122,7 +146,7 @@ export function TranscriptMatrix({
                       <div>{formatPercent(row.behaviorPct)}</div>
                       <div className="text-[10px] sm:text-xs">{row.behaviorLevel}</div>
                     </td>
-                    {visibleQuizColumns.map((type) => (
+                    {visibleAssessmentColumns.map((type) => (
                       <td
                         key={type}
                         className="px-1 py-1.5 text-center tabular-nums sm:px-2 sm:py-2"

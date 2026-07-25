@@ -27,6 +27,14 @@ export {
   type AssessmentTypeCode,
 } from "../../prisma/lookup-data";
 
+export {
+  STAFF_POSITION_CODES,
+  STAFF_ROLE_CODES,
+  STAFF_ROLE_LABELS,
+  type StaffPositionCode,
+  type StaffRoleCode,
+} from "@/lib/roles/staff-positions";
+
 /** @deprecated Use SessionTypeCode */
 export type SessionType = SessionTypeCode;
 /** @deprecated Use AttendanceStatusCode */

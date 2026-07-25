@@ -27,7 +27,7 @@ export function letterGrade(
   for (const band of sorted) {
     if (pct >= band.minPct) return band.letter;
   }
-  return sorted[sorted.length - 1]?.letter ?? "F";
+  return "D";
 }
 
 export function passFail(

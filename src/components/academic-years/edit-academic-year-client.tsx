@@ -86,7 +86,7 @@ export function EditAcademicYearClient({
               name: year.name,
               startDate: toDateInputValue(year.startDate),
               endDate: toDateInputValue(year.endDate),
-              docsDriveFolderId: year.docsDriveFolderId ?? "",
+              isActive: year.schoolLinks.some((link) => link.isActive),
             }}
             onSubmit={handleSubmit}
             submitLabel="Save Changes"

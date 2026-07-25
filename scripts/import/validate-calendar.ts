@@ -1,4 +1,5 @@
 import type { SessionTypeCode } from "../../prisma/lookup-data";
+import { calendarDateKey } from "../../src/lib/calendar/calendar-date";
 import {
   defaultSessionTypeForSunday,
   generateSundays,
@@ -10,7 +11,6 @@ import {
   normalizeSection,
   normalizeSessionType,
   parseDate,
-  parseOptionalScore,
   studentKey,
 } from "./normalize";
 import type { RowRecord } from "./read-workbook";
@@ -45,12 +45,12 @@ export type CalendarValidationSummary = {
   quizDayCounts: Record<string, number>;
   finalExamDays: number;
   midtermDays: number;
-  requiredAssessmentColumns: string[];
+  calendarAssessmentColumns: string[];
   attendanceOnBlockedDays: number;
 };
 
 function dateKey(date: Date): string {
-  return date.toISOString().slice(0, 10);
+  return calendarDateKey(date);
 }
 
 function assertSunday(date: Date, context: string): void {
@@ -98,7 +98,12 @@ export function buildImportCalendar(
   const calendar = new Map<string, SessionTypeCode>();
 
   sundays.forEach((date, index) => {
-    calendar.set(dateKey(date), defaultSessionTypeForSunday(index + 1));
+    calendar.set(
+      dateKey(date),
+      defaultSessionTypeForSunday(index + 1, sundays.length, {
+        sundayDateKeys: sundays.map((d) => dateKey(d)),
+      })
+    );
   });
 
   const seenOverrideDates = new Set<string>();
@@ -126,7 +131,7 @@ export function buildImportCalendar(
   return calendar;
 }
 
-function getRequiredAssessmentColumns(
+function getCalendarAssessmentColumns(
   calendar: Map<string, SessionTypeCode>
 ): string[] {
   const columns = new Set<string>();
@@ -161,12 +166,12 @@ export function validateImportCalendar(
   yearEnd: Date,
   calendarOptional: RowRecord[],
   attendance: RowRecord[],
-  assessments: RowRecord[],
-  students: RowRecord[]
+  assessments: RowRecord[]
 ): CalendarValidationSummary {
   const calendar = buildImportCalendar(yearStart, yearEnd, calendarOptional);
-  const requiredAssessmentColumns = getRequiredAssessmentColumns(calendar);
-  const assessmentRowsByStudent = indexAssessmentRows(assessments);
+  const calendarAssessmentColumns = getCalendarAssessmentColumns(calendar);
+
+  indexAssessmentRows(assessments);
 
   let attendanceOnBlockedDays = 0;
 
@@ -192,37 +197,6 @@ export function validateImportCalendar(
     }
   }
 
-  if (requiredAssessmentColumns.length > 0) {
-    for (const [index, studentRow] of students.entries()) {
-      const studentLabel = formatStudentLabel(studentRow);
-      const matchKey = studentMatchKey(studentRow);
-      if (!matchKey) {
-        throw new Error(
-          `Students row ${index + 2}: cannot identify student for assessment validation.`
-        );
-      }
-
-      const assessmentRow = assessmentRowsByStudent.get(matchKey);
-      if (!assessmentRow) {
-        throw new Error(
-          `Assessments sheet is missing a row for student ${studentLabel}, but the calendar includes quiz or exam days that require scores.`
-        );
-      }
-
-      for (const column of requiredAssessmentColumns) {
-        const score = parseOptionalScore(assessmentRow[column]);
-        if (score == null) {
-          const sessionType = ASSESSMENT_FIELD_MAP.find((field) => field.column === column)?.type;
-          const label =
-            (sessionType && SESSION_TYPE_LABELS[sessionType]) || column.replace(/_/g, " ");
-          throw new Error(
-            `Assessments row for ${studentLabel}: ${column} is required because a ${label} day exists on the calendar.`
-          );
-        }
-      }
-    }
-  }
-
   const quizDayCounts: Record<string, number> = {};
   let holidayCount = 0;
   let finalExamDays = 0;
@@ -244,7 +218,7 @@ export function validateImportCalendar(
     quizDayCounts,
     finalExamDays,
     midtermDays,
-    requiredAssessmentColumns,
+    calendarAssessmentColumns,
     attendanceOnBlockedDays,
   };
 }
@@ -257,9 +231,9 @@ export function formatCalendarValidation(summary: CalendarValidationSummary): st
           .join(", ")
       : "none";
 
-  const requiredAssessments =
-    summary.requiredAssessmentColumns.length > 0
-      ? summary.requiredAssessmentColumns.join(", ")
+  const calendarAssessments =
+    summary.calendarAssessmentColumns.length > 0
+      ? summary.calendarAssessmentColumns.join(", ")
       : "none";
 
   return [
@@ -270,6 +244,6 @@ export function formatCalendarValidation(summary: CalendarValidationSummary): st
     `  Quiz days: ${quizSummary}`,
     `  Midterm project days: ${summary.midtermDays}`,
     `  Final exam days: ${summary.finalExamDays}`,
-    `  Required assessment columns: ${requiredAssessments}`,
+    `  Calendar assessment columns: ${calendarAssessments} (scores optional per student)`,
   ].join("\n");
 }

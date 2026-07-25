@@ -4,38 +4,75 @@ Multi-tenant school management for Faizan Weekend Islamic Schools under Faizan D
 
 ## Tech Stack
 
-- **Frontend:** Next.js 16 (App Router), TypeScript, Tailwind CSS, shadcn/ui-style components
+- **Frontend:** Next.js 16 (App Router), TypeScript, Tailwind CSS
 - **Backend:** Next.js Server Actions & API Routes
-- **Database:** PostgreSQL via Supabase
-- **Auth:** Supabase Auth
+- **Database:** PostgreSQL (SmarterASP.NET)
+- **Auth:** App-managed sessions (`app_users` + signed cookie; passwords hashed with scrypt)
 - **ORM:** Prisma
-- **Hosting:** Vercel
-
-## Features
-
-- Multi-tenant architecture with role-based access (Super Admin, School Admin, Teacher, Read Only)
-- Global student records with per-year enrollments
-- Sunday academic calendar with bulk generation
-- Mobile-first attendance entry with behavior tracking
-- Weighted grade calculation (attendance, behavior, quizzes, midterm, final)
-- Audit logging and soft deletes
-- Dark/light mode, responsive sidebar, toast notifications
-- CSV & Excel export utilities
+- **Hosting:** SmarterASP.NET (Node.js + PostgreSQL)
 
 ## Prerequisites
 
 - Node.js 20+ (LTS recommended)
-- Supabase project with PostgreSQL
-- npm or pnpm
+- PostgreSQL database (SmarterASP.NET or local)
+- npm
 
-## Setup
+## Features
 
-### 1. Clone and install
+- Multi-tenant architecture with role-based access control
+- Global student records with per-year enrollments
+- Global academic years linked to schools via `academic_year_schools`
+- Sunday academic calendar with bulk generation and session types
+- Mobile-first attendance with behavior tracking
+- Weighted grade calculation (attendance, behavior, quizzes, midterm, final)
+- Excel import/export for historical school data
+- Student PII encryption at rest (AES-256-GCM)
+- Audit logging and soft deletes
+- Dark/light mode, responsive sidebar
 
-```bash
-cd C:\Users\Home\Projects\fwis
-npm install
-```
+## Users, roles & permissions
+
+FWIS uses four roles. Each login is an **App User** (`app_users`) with one or more roles and access to one or more schools.
+
+| Role | Scope | Typical use |
+|------|--------|-------------|
+| **Super Admin** | All schools, all modules | FWIS central staff |
+| **School Admin** | Assigned school(s); optional Boys/Girls or single-grade scope | Principal, section heads, grade leads |
+| **Teacher** | Assigned classroom only | Sunday attendance & assessments |
+| **Read Only** | View assigned school(s); no writes | Auditors, observers |
+
+### Permission highlights
+
+| Area | Super Admin | School Admin | Teacher | Read Only |
+|------|:-----------:|:------------:|:-------:|:---------:|
+| Schools (create/delete) | Yes | No | — | View |
+| Academic years & calendar | Yes | Yes (their schools) | — | View |
+| Students & enrollments | Yes | Yes | — | View |
+| Attendance & assessments | Yes | Yes | Own grade | View |
+| Users management | Yes | Yes (their schools) | — | — |
+| Data backup / import template | Yes | Yes | — | — |
+| Grading scale (system-wide) | Yes | View | — | — |
+
+Navigation and server actions enforce permissions via `src/lib/auth/permissions.ts`. School Admins with a **gender** and linked **classroom** are scoped to Boys or Girls sections, or a single grade.
+
+### Default logins
+
+After `npm run setup`, sign in with:
+
+| Role | User ID | Password |
+|------|---------|----------|
+| Super Admin (majlis) | `majlis` | `SEED_SUPER_ADMIN_PASSWORD` (suggested: `FwisMajlis786!`) |
+
+When you **create a school** with “Create default app users”, FWIS creates **17** logins from the 3-letter school code (e.g. `HOU` → `hou`):
+
+| Pattern | Role | Default password |
+|---------|------|------------------|
+| `{code}.principal` | Principal | `FwisPrincipal786!` |
+| `{code}.m.admin` / `{code}.f.admin` | School Admin | `FwisAdmin786!` |
+| `{code}.b.g1`–`g6` / `{code}.g.g1`–`g6` | Teacher | `FwisTeacher786!` |
+| `{code}.m.sub` / `{code}.f.sub` | Substitute | `FwisSub786!` |
+
+Example Houston: `hou.principal`, `hou.b.g1`, `hou.f.admin`. Import **links** Staff rows to these existing logins — it does not create passwords. See [docs/DATA_IMPORT.md](docs/DATA_IMPORT.md) and [docs/LEADERSHIP_DEMO.md](docs/LEADERSHIP_DEMO.md).
 
 ### 2. Environment variables
 
@@ -43,73 +80,47 @@ npm install
 cp .env.example .env.local
 ```
 
-Fill in your Supabase credentials:
+Fill in credentials (see [docs/SMARTERASP_SETUP.md](docs/SMARTERASP_SETUP.md)):
 
+| Variable | Description |
+| -------- | ----------- |
+| `DATABASE_URL` | PostgreSQL connection string |
+| `DIRECT_URL` | Same URL for Prisma CLI migrations |
+| `AUTH_SESSION_SECRET` | Random 32+ char secret for session cookies |
+| `SEED_SUPER_ADMIN_USER_ID` | Initial super admin login id (default `majlis`) |
+| `SEED_SUPER_ADMIN_PASSWORD` | Initial super admin password (seed only) |
+| `PII_ENCRYPTION_KEY` | 32-byte base64 key for student PII |
+| `NEXT_PUBLIC_APP_URL` | Public site URL (required for hosting builds) |
 
-| Variable                        | Description                                 |
-| ------------------------------- | ------------------------------------------- |
-| `DATABASE_URL`                  | Supabase pooler connection string           |
-| `DIRECT_URL`                    | Supabase direct connection (for migrations) |
-| `NEXT_PUBLIC_SUPABASE_URL`      | Supabase project URL                        |
-| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Supabase anon key                           |
-| `SUPABASE_SERVICE_ROLE_KEY`     | Service role key (server only)              |
-
+Optional role password overrides: `DEFAULT_PRINCIPAL_PASSWORD`, `DEFAULT_ADMIN_PASSWORD`, `DEFAULT_TEACHER_PASSWORD` (or legacy `IMPORT_TEACHER_DEFAULT_PASSWORD`), `DEFAULT_SUBSTITUTE_PASSWORD`.
 
 ### 3. Database
-
-Use the npm scripts (recommended) or plain Prisma CLI — both load `**.env.local**` via `prisma.config.ts`. You need `**DATABASE_URL**` and `**DIRECT_URL**` (see `.env.example`).
 
 ```bash
 npm run db:deploy    # apply pending migrations (production/CI)
 npm run db:migrate   # create + apply migrations in dev
-npm run db:seed
+npm run db:seed      # lookups, roles, majlis, 5 schools, 2026-2027 calendar, default logins
 ```
 
-Equivalent without npm scripts:
+**PII encryption:** Set `PII_ENCRYPTION_KEY` (see [docs/pii-security.md](docs/pii-security.md)), then run `npm run db:encrypt-pii` if legacy plaintext student fields exist.
+
+**Backups:** SmarterASP PostgreSQL backups — see [docs/backup-recovery.md](docs/backup-recovery.md).
+
+**Troubleshooting migrations:** If Prisma reports a modified migration checksum, run `npm run db:fix-checksums` before retrying.
+
+### 4. Initial data
 
 ```bash
-npx prisma migrate deploy
+npm run setup          # migrate + seed (lookups + super admin)
+# Create school in app with “Create default app users” checked
+npm run import:template   # generate Excel template
+npm run import:school -- --file path/to/workbook.xlsx --dry-run
+npm run import:school -- --file path/to/workbook.xlsx
 ```
 
-**Troubleshooting:** If migrate says a migration was *modified after it was applied* and asks to reset, run `npm run db:fix-checksums` first (syncs checksums without deleting data), then `npm run db:migrate` again. Only use `npx dotenv -e .env.local -- prisma migrate reset` if you are okay losing all database data.
+The import links Staff/Students to an **existing** school, academic year, and app user logins.
 
-After pulling security updates, also run in Supabase SQL Editor: `supabase/migrations/002_app_user_self_read.sql` (enables middleware inactive-user check).
-
-**PII encryption:** Set `PII_ENCRYPTION_KEY` (see `docs/pii-security.md`), run `npm run db:deploy`, then `npm run db:encrypt-pii` to encrypt existing student records.
-
-**Backups:** Enable Supabase automated backups and test a restore once — see `docs/backup-recovery.md`.
-
-If you see `Environment variable not found: DIRECT_URL`, add `DIRECT_URL` to `.env.local` (Supabase **direct** connection, port 5432 — not the pooler).
-
-### 4. Auth users (all roles)
-
-Run the full setup (migrations, seed, and Supabase Auth users):
-
-```bash
-npm run setup
-```
-
-Or create users manually in Supabase Auth — user UUIDs must match the seed.
-
-
-| Role                                 | Email                          | Password          | Landing page              |
-| ------------------------------------ | ------------------------------ | ----------------- | ------------------------- |
-| Super Admin                          | `superadmin@fwis.org`          | `FwisAdmin786!`   | `/dashboard/super-admin`  |
-| School Admin (Houston, all sections) | `admin.houston@fwis.org`       | `FwisAdmin786!`   | `/dashboard/school-admin` |
-| Boys Admin (Houston)                 | `admin.m.houston@fwis.org`     | `FwisAdmin786!`   | `/dashboard/school-admin` |
-| Girls Admin (Houston)                | `admin.f.houston@fwis.org`     | `FwisAdmin786!`   | `/dashboard/school-admin` |
-| Teacher (Houston, Grade 1 Boys)      | `grade1.boys.houston@fwis.org` | `FwisTeacher786!` | `/dashboard/teacher`      |
-
-
-Each school also has `admin.m.{city}@fwis.org` (Boys) and `admin.f.{city}@fwis.org` (Girls), e.g. `admin.m.chicago@fwis.org`. City slugs: `houston`, `chicago`, `newyork`, `dallas`, `atlanta`.
-
-Super Admin UUID: `00000000-0000-4000-8000-000000000001`
-
-### 5. RLS policies (optional, recommended)
-
-Run `supabase/migrations/001_rls_policies.sql` in the Supabase SQL Editor.
-
-### 6. Run locally
+### 5. Run locally
 
 ```bash
 npm run dev
@@ -117,79 +128,93 @@ npm run dev
 
 Open [http://localhost:3000](http://localhost:3000)
 
-### 7. Import historical school data (Excel)
+## Import & backup
 
-Generate the multi-school import template and share it with each campus:
+| Command | Purpose |
+|---------|---------|
+| `npm run import:template` | Generate blank Excel template |
+| `npm run import:school -- --file …` | Import school year from Excel |
+| Backup page in app | Export school year workbook; download import template |
 
-```bash
-npm run import:template
-```
+See [docs/DATA_IMPORT.md](docs/DATA_IMPORT.md) for the Google Sheets workflow and column reference.
 
-See [docs/DATA_IMPORT.md](docs/DATA_IMPORT.md) for sheet/column details, import commands, and **Google Sheets** workflow (no Microsoft Office required).
-
-## Project Structure
+## Project structure
 
 ```
 src/
 ├── app/
-│   ├── (app)/          # Authenticated app routes with sidebar
-│   ├── auth/           # Supabase auth callback
-│   ├── login/          # Login page
-│   └── page.tsx        # Public landing page
-├── actions/            # Server Actions (schools, attendance, ...)
+│   ├── (app)/          # Authenticated routes (sidebar shell)
+│   ├── login/          # Sign-in
+│   └── page.tsx        # Public landing
+├── actions/            # Server Actions
 ├── components/
-│   ├── layout/         # Sidebar, app shell
-│   ├── ui/             # shadcn-style components
-│   └── modules/        # Shared module components
+│   ├── layout/         # Sidebar, school/year switchers
+│   └── ui/
 └── lib/
-    ├── auth/           # Session, permissions, RBAC
-    ├── security/       # HTTPS headers, secure cookies
-    ├── supabase/       # Supabase clients
+    ├── auth/           # Session, permissions, RBAC, section scope
+    ├── crypto/         # PII encryption (AES-256-GCM)
+    ├── students/       # PII encrypt/decrypt helpers
+    ├── calendar/       # Sunday generation, session types
     ├── grades/         # Final grade calculation
-    ├── behavior/       # Behavior score logic
-    ├── calendar/       # Sunday generation
-    ├── export/         # CSV, Excel export
-    └── audit/          # Audit logging
+    └── import/         # Excel template spec & builder
 prisma/
-├── schema.prisma       # Full database schema
-└── seed.ts             # Sample data
-supabase/
-└── migrations/         # RLS policies
+├── schema.prisma
+├── seed.ts             # Lookups + super admin only
+└── migrations/
+scripts/
+├── import-school-data.ts
+├── setup.ts
+└── build-hosting-package.ts
+docs/
+├── SMARTERASP_SETUP.md
+├── DATA_IMPORT.md
+├── LEADERSHIP_DEMO.md
+└── pii-security.md
 ```
 
-## Role Landing Pages
+## Role landing pages
 
-
-| Role         | Default Route             |
-| ------------ | ------------------------- |
-| Super Admin  | `/dashboard/super-admin`  |
+| Role | Default route |
+| ---- | ------------- |
+| Super Admin | `/dashboard/super-admin` |
 | School Admin | `/dashboard/school-admin` |
-| Teacher      | `/dashboard/teacher`      |
-| Read Only    | `/dashboard/read-only`    |
+| Teacher | `/dashboard/teacher` |
+| Read Only | `/dashboard/read-only` |
 
+## Deploy to SmarterASP.NET
 
-## Deploy to Vercel
+1. Configure `.env.stage` / `.env.prod` (separate DB and secrets per environment)
+2. Run migrations against hosted DB: `npx dotenv -e .env.prod -- prisma migrate deploy`
+3. Seed once: `npx dotenv -e .env.prod -- npm run db:seed`
+4. Build hosting package: `npm run build:hosting:prod`
+5. Upload output to SmarterASP Node.js site
 
-1. Push to GitHub
-2. Import project in Vercel
-3. Add environment variables from `.env.example`
-4. Set `**NEXT_PUBLIC_APP_URL**` to your production URL with `**https://**` (e.g. `https://fwis.yourdomain.com`)
-5. Add build command: `prisma generate && next build`
-6. Run `npx prisma migrate deploy` against production DB
+See [docs/SMARTERASP_SETUP.md](docs/SMARTERASP_SETUP.md) and `scripts/build-hosting-package.ts`.
 
-**HTTPS (automatic on Vercel):** Production builds enforce HTTPS via middleware (HTTP → HTTPS redirect), **HSTS** headers, and **Secure** session cookies. Local dev stays on `http://localhost:3000`.
+## Grade weights
 
-## Grade Weights
+| Component | Weight |
+| --------- | ------ |
+| Attendance | 10% |
+| Behavior | 10% |
+| Quiz 1–5 | 5% each (25% total) |
+| Midterm Project | 10% |
+| Final Exam | 45% |
 
+Pass threshold: **70%**.
 
-| Component       | Weight  |
-| --------------- | ------- |
-| Attendance      | 10%     |
-| Behavior        | 10%     |
-| Quiz 1–5        | 5% each |
-| Midterm Project | 15%     |
-| Final Exam      | 40%     |
+Letter grades: **A** ≥90, **B** ≥80, **C** ≥70, **D** &lt;70 (no F). Pass/Fail uses the same 70% threshold (D = Fail).
 
+## Documentation
+
+| Document | Contents |
+| -------- | -------- |
+| [docs/SMARTERASP_SETUP.md](docs/SMARTERASP_SETUP.md) | Database, env, deploy |
+| [docs/HOSTING_COMPARISON.md](docs/HOSTING_COMPARISON.md) | SmarterASP vs Vercel cost comparison |
+| [docs/DATA_IMPORT.md](docs/DATA_IMPORT.md) | Excel import workflow |
+| [docs/LEADERSHIP_DEMO.md](docs/LEADERSHIP_DEMO.md) | Leadership deck & demo accounts |
+| [docs/pii-security.md](docs/pii-security.md) | Student PII encryption |
+| [docs/backup-recovery.md](docs/backup-recovery.md) | Backups & recovery |
 
 ## License
 

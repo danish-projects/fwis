@@ -17,7 +17,6 @@ export function buildMissingLessonPlanReasons(input: {
   gradeName: string;
   lessonPlanNumber: number;
   academicYearName: string | null;
-  docsDriveFolderId: string | null;
   driveConfigured: boolean;
 }): string[] {
   const expectedFileName = `${buildLessonPlanFileBaseName(
@@ -34,15 +33,11 @@ export function buildMissingLessonPlanReasons(input: {
 
   if (!input.driveConfigured) {
     reasons.unshift(
-      "Google Drive is not fully configured (service account credentials or academic year folder ID missing)."
-    );
-  } else if (!input.docsDriveFolderId) {
-    reasons.unshift(
-      `The FWIS Docs folder ID is not set for academic year ${yearSegment}. Add it under Setup → Academic Years.`
+      "Google Drive is not fully configured (service account credentials or GOOGLE_DRIVE_FWIS_DOCS_FOLDER_ID missing)."
     );
   } else {
     reasons.push(
-      "The Google service account may not have Viewer access to the FWIS Docs folder."
+      "Confirm a Drive folder named exactly like the academic year exists under FWIS Docs, and the service account has Viewer access."
     );
   }
 

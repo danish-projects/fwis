@@ -8,9 +8,11 @@ datasource db {
 }
 
 enum UserRoleCode {
-  SUPER_ADMIN
+  NIGRA
+  PRINCIPAL
   SCHOOL_ADMIN
   TEACHER
+  SUBSTITUTE
   READ_ONLY
 }
 
@@ -30,7 +32,7 @@ model Gender {
   label String
 
   students Student[]
-  teachers Teacher[]
+  staff    Staff[]
   appUsers AppUser[]
 
   @@map("genders")
@@ -116,15 +118,14 @@ model School {
   zipCode       String?   @map("zip_code")
   phone         String?
   email         String?
-  principalName String?   @map("principal_name")
   isActive      Boolean   @default(true) @map("is_active")
   createdAt     DateTime  @default(now()) @map("created_at")
   updatedAt     DateTime  @updatedAt @map("updated_at")
   deletedAt     DateTime? @map("deleted_at")
 
   academicYearSchools AcademicYearSchool[]
-  classrooms    Classroom[]
-  teachers      Teacher[]
+  classroomSchools ClassroomSchool[]
+  staff         Staff[]
   enrollments   StudentEnrollment[]
   userSchools   UserSchool[]
   auditLogs     AuditLog[]
@@ -134,9 +135,9 @@ model School {
   @@map("schools")
 }
 
+/** Shared classroom definition (e.g. Grade 1 Boys) — not school-specific. */
 model Classroom {
   id        String    @id @default(uuid()) @db.Uuid
-  schoolId  String    @map("school_id") @db.Uuid
   gradeId   Int       @map("grade_id")
   sectionId Int       @map("section_id")
   name      String
@@ -145,14 +146,32 @@ model Classroom {
   updatedAt DateTime  @updatedAt @map("updated_at")
   deletedAt DateTime? @map("deleted_at")
 
-  school      School              @relation(fields: [schoolId], references: [id])
   grade       Grade               @relation(fields: [gradeId], references: [id])
   section     Section             @relation(fields: [sectionId], references: [id])
+  schoolLinks ClassroomSchool[]
   enrollments StudentEnrollment[]
-  teachers    TeacherClassroom[]
+  assignments StaffAssignment[]
 
-  @@unique([schoolId, gradeId, sectionId])
+  @@unique([gradeId, sectionId])
   @@map("classrooms")
+}
+
+/** Which schools offer a master classroom. */
+model ClassroomSchool {
+  id          String    @id @default(uuid()) @db.Uuid
+  classroomId String    @map("classroom_id") @db.Uuid
+  schoolId    String    @map("school_id") @db.Uuid
+  isActive    Boolean   @default(true) @map("is_active")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+  deletedAt   DateTime? @map("deleted_at")
+
+  classroom Classroom @relation(fields: [classroomId], references: [id])
+  school    School    @relation(fields: [schoolId], references: [id])
+
+  @@unique([classroomId, schoolId])
+  @@index([schoolId, deletedAt])
+  @@map("classroom_schools")
 }
 
 model AcademicYear {
@@ -160,15 +179,31 @@ model AcademicYear {
   name              String    @unique
   startDate         DateTime  @map("start_date") @db.Date
   endDate           DateTime  @map("end_date") @db.Date
-  docsDriveFolderId String?   @map("docs_drive_folder_id")
   createdAt         DateTime  @default(now()) @map("created_at")
   updatedAt         DateTime  @updatedAt @map("updated_at")
   deletedAt         DateTime? @map("deleted_at")
 
   schoolLinks AcademicYearSchool[]
+  holidays    AcademicYearHoliday[]
 
   @@index([deletedAt])
   @@map("academic_years")
+}
+
+model AcademicYearHoliday {
+  id             String    @id @default(uuid()) @db.Uuid
+  academicYearId String    @map("academic_year_id") @db.Uuid
+  date           DateTime  @db.Date
+  name           String?
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+  deletedAt      DateTime? @map("deleted_at")
+
+  academicYear AcademicYear @relation(fields: [academicYearId], references: [id])
+
+  @@unique([academicYearId, date])
+  @@index([academicYearId, deletedAt])
+  @@map("academic_year_holidays")
 }
 
 model AcademicYearSchool {
@@ -184,6 +219,7 @@ model AcademicYearSchool {
   school       School                @relation(fields: [schoolId], references: [id])
   calendarDays AcademicCalendarDay[]
   enrollments  StudentEnrollment[]
+  staffAssignments StaffAssignment[]
 
   @@unique([academicYearId, schoolId])
   @@index([schoolId, deletedAt])
@@ -217,12 +253,23 @@ model Student {
   gender           String
   dateOfBirth      String?   @map("date_of_birth")
   dateOfBirthHash  String?   @map("date_of_birth_hash")
-  parentName       String?   @map("parent_name")
-  parentPhone      String?   @map("parent_phone")
-  parentPhoneHash  String?   @map("parent_phone_hash")
-  parentEmail      String?   @map("parent_email")
-  address          String?
+  emailAddress     String?   @map("email_address")
   emergencyContact String?   @map("emergency_contact")
+  streetAddress    String?   @map("street_address")
+  city             String?
+  stateProvince    String?   @map("state_province")
+  zipPostalCode    String?   @map("zip_postal_code")
+  country          String?
+  fatherGuardianFirstName       String?  @map("father_guardian_first_name")
+  fatherGuardianLastName        String?  @map("father_guardian_last_name")
+  fatherParentalResponsibility  Boolean? @map("father_parental_responsibility")
+  fatherMobileWhatsappNumber    String?  @map("father_mobile_whatsapp_number")
+  fatherMobileWhatsappHash      String?  @map("father_mobile_whatsapp_hash")
+  motherGuardianFirstName       String?  @map("mother_guardian_first_name")
+  motherGuardianLastName        String?  @map("mother_guardian_last_name")
+  motherParentalResponsibility  Boolean? @map("mother_parental_responsibility")
+  motherMobileWhatsappNumber    String?  @map("mother_mobile_whatsapp_number")
+  motherMobileWhatsappHash      String?  @map("mother_mobile_whatsapp_hash")
   enrollmentDate   DateTime  @default(now()) @map("enrollment_date") @db.Date
   originSchoolId   String?   @map("origin_school_id") @db.Uuid
   isActive         Boolean   @default(true) @map("is_active")
@@ -236,8 +283,9 @@ model Student {
 
   @@index([lastName, firstName])
   @@index([originSchoolId])
-  @@index([parentPhoneHash])
   @@index([dateOfBirthHash])
+  @@index([fatherMobileWhatsappHash])
+  @@index([motherMobileWhatsappHash])
   @@map("students")
 }
 
@@ -250,13 +298,15 @@ model StudentNumberSequence {
   @@map("student_number_sequences")
 }
 
-model Teacher {
+model Staff {
   id        String    @id @default(uuid()) @db.Uuid
   schoolId  String    @map("school_id") @db.Uuid
-  userId    String?   @unique @map("user_id") @db.Uuid
+  /** Login handle — FK to app_users.user_id (not app_users.id). */
+  userId    String?   @unique @map("user_id")
   gender    String
   firstName String    @map("first_name")
   lastName  String    @map("last_name")
+  /** Contact / communication email (not used for login). */
   email     String
   phone     String?
   isActive  Boolean   @default(true) @map("is_active")
@@ -266,24 +316,34 @@ model Teacher {
 
   school      School              @relation(fields: [schoolId], references: [id])
   genderRef   Gender              @relation(fields: [gender], references: [code])
-  user        AppUser?            @relation(fields: [userId], references: [id])
-  classrooms  TeacherClassroom[]
+  user        AppUser?            @relation(fields: [userId], references: [userId], onUpdate: Cascade, onDelete: SetNull)
+  assignments StaffAssignment[]
   enrollments StudentEnrollment[]
 
   @@unique([schoolId, email])
-  @@map("teachers")
+  @@map("staff")
 }
 
-model TeacherClassroom {
-  teacherId   String @map("teacher_id") @db.Uuid
-  classroomId String @map("classroom_id") @db.Uuid
+/** Role + classroom for a staff member within one school academic year. */
+model StaffAssignment {
+  id                   String  @id @default(uuid()) @db.Uuid
+  staffId              String  @map("staff_id") @db.Uuid
+  academicYearSchoolId String  @map("academic_year_school_id") @db.Uuid
+  roleId               Int     @map("role_id")
+  /** Null for Nigran / Principal / Substitute without a single grade. */
+  classroomId          String? @map("classroom_id") @db.Uuid
+  createdAt            DateTime @default(now()) @map("created_at")
+  updatedAt            DateTime @updatedAt @map("updated_at")
 
-  teacher   Teacher   @relation(fields: [teacherId], references: [id], onDelete: Cascade)
-  classroom Classroom @relation(fields: [classroomId], references: [id], onDelete: Cascade)
+  staff              Staff              @relation(fields: [staffId], references: [id], onDelete: Cascade)
+  academicYearSchool AcademicYearSchool @relation(fields: [academicYearSchoolId], references: [id], onDelete: Cascade)
+  role               Role               @relation(fields: [roleId], references: [id])
+  classroom          Classroom?         @relation(fields: [classroomId], references: [id], onDelete: SetNull)
 
-  @@id([teacherId, classroomId])
-  @@unique([teacherId])
-  @@map("teacher_classrooms")
+  @@unique([staffId, academicYearSchoolId])
+  @@unique([academicYearSchoolId, classroomId])
+  @@index([academicYearSchoolId])
+  @@map("staff_assignments")
 }
 
 model StudentEnrollment {
@@ -292,7 +352,7 @@ model StudentEnrollment {
   schoolId             String   @map("school_id") @db.Uuid
   academicYearSchoolId String   @map("academic_year_school_id") @db.Uuid
   classroomId          String   @map("classroom_id") @db.Uuid
-  teacherId            String?  @map("teacher_id") @db.Uuid
+  staffId              String?  @map("staff_id") @db.Uuid
   enrollmentDate       DateTime @default(now()) @map("enrollment_date") @db.Date
   status               String   @default("ACTIVE")
   createdAt            DateTime @default(now()) @map("created_at")
@@ -303,7 +363,7 @@ model StudentEnrollment {
   school               School               @relation(fields: [schoolId], references: [id])
   academicYearSchool   AcademicYearSchool   @relation(fields: [academicYearSchoolId], references: [id])
   classroom            Classroom            @relation(fields: [classroomId], references: [id])
-  teacher              Teacher?             @relation(fields: [teacherId], references: [id])
+  staff                Staff?               @relation(fields: [staffId], references: [id])
   statusLookup         EnrollmentStatus     @relation(fields: [status], references: [code])
   attendance           Attendance[]
   assessments          AssessmentScore[]
@@ -379,7 +439,7 @@ model GradingScaleConfig {
   id          String   @id @default("global")
   weights     Json
   letterBands Json     @map("letter_bands")
-  passMinPct  Decimal  @default(60) @map("pass_min_pct") @db.Decimal(5, 2)
+  passMinPct  Decimal  @default(70) @map("pass_min_pct") @db.Decimal(5, 2)
   updatedAt   DateTime @updatedAt @map("updated_at")
   updatedById String?  @map("updated_by_id") @db.Uuid
 
@@ -393,28 +453,30 @@ model Role {
   code UserRoleCode @unique
   name String
 
-  userRoles UserRole[]
+  userRoles   UserRole[]
+  assignments StaffAssignment[]
 
   @@map("roles")
 }
 
 model AppUser {
-  id        String   @id @default(uuid()) @db.Uuid
-  email     String   @unique
-  fullName  String?  @map("full_name")
-  gender    String?
-  isActive  Boolean  @default(true) @map("is_active")
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
+  id           String   @id @default(uuid()) @db.Uuid
+  userId       String   @unique @map("user_id")
+  passwordHash String?  @map("password_hash")
+  fullName     String?  @map("full_name")
+  gender       String?
+  isActive     Boolean  @default(true) @map("is_active")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
 
-  genderRef       Gender? @relation(fields: [gender], references: [code])
+  genderRef Gender? @relation(fields: [gender], references: [code])
 
-  roles           UserRole[]
-  schools         UserSchool[]
-  teacher         Teacher?
-  auditLogs       AuditLog[]
-  attendance      Attendance[]
-  assessments     AssessmentScore[]
+  roles               UserRole[]
+  schools             UserSchool[]
+  staff               Staff?
+  auditLogs           AuditLog[]
+  attendance          Attendance[]
+  assessments         AssessmentScore[]
   gradingScaleUpdates GradingScaleConfig[]
 
   @@map("app_users")

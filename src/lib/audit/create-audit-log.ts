@@ -2,12 +2,20 @@ import { AuditAction, Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 
 const PII_FIELDS = new Set([
-  "parentName",
-  "parentPhone",
-  "parentEmail",
-  "address",
+  "emailAddress",
   "emergencyContact",
   "dateOfBirth",
+  "streetAddress",
+  "city",
+  "stateProvince",
+  "zipPostalCode",
+  "country",
+  "fatherGuardianFirstName",
+  "fatherGuardianLastName",
+  "fatherMobileWhatsappNumber",
+  "motherGuardianFirstName",
+  "motherGuardianLastName",
+  "motherMobileWhatsappNumber",
   "password",
 ]);
 

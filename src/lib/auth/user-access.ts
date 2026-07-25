@@ -5,7 +5,7 @@ export async function assertUserSchoolAccess(
   user: AuthUser,
   schoolIds: string[]
 ): Promise<void> {
-  if (user.roles.includes("SUPER_ADMIN")) return;
+  if (user.roles.includes("NIGRA")) return;
   const unauthorized = schoolIds.some((id) => !user.schoolIds.includes(id));
   if (unauthorized) {
     throw new Error("Unauthorized school access");
@@ -16,7 +16,7 @@ export function assertAssignableRoles(
   actor: AuthUser,
   roleCodes: UserRoleCode[]
 ): void {
-  if (roleCodes.includes("SUPER_ADMIN") && !actor.roles.includes("SUPER_ADMIN")) {
+  if (roleCodes.includes("NIGRA") && !actor.roles.includes("NIGRA")) {
     throw new Error("Only Super Admin can assign the Super Admin role");
   }
 }
@@ -24,7 +24,7 @@ export function assertAssignableRoles(
 export async function assertUserRecordAccess(
   user: AuthUser,
   targetUserId: string
-): Promise<{ id: string; email: string }> {
+): Promise<{ id: string; userId: string }> {
   const { prisma } = await import("@/lib/prisma");
   const target = await prisma.appUser.findUnique({
     where: { id: targetUserId },
@@ -32,8 +32,8 @@ export async function assertUserRecordAccess(
   });
   if (!target) throw new Error("User not found");
 
-  if (user.roles.includes("SUPER_ADMIN")) {
-    return { id: target.id, email: target.email };
+  if (user.roles.includes("NIGRA")) {
+    return { id: target.id, userId: target.userId };
   }
 
   const targetSchoolIds = target.schools.map((s) => s.schoolId);
@@ -41,7 +41,7 @@ export async function assertUserRecordAccess(
   if (!overlaps && targetSchoolIds.length > 0) {
     throw new Error("Unauthorized user access");
   }
-  if (targetSchoolIds.length === 0 && !user.roles.includes("SUPER_ADMIN")) {
+  if (targetSchoolIds.length === 0 && !user.roles.includes("NIGRA")) {
     throw new Error("Unauthorized user access");
   }
 
@@ -49,9 +49,9 @@ export async function assertUserRecordAccess(
     where: { userId: targetUserId },
     include: { role: true },
   });
-  if (targetRoles.some((r) => r.role.code === "SUPER_ADMIN")) {
+  if (targetRoles.some((r) => r.role.code === "NIGRA")) {
     throw new Error("Unauthorized user access");
   }
 
-  return { id: target.id, email: target.email };
+  return { id: target.id, userId: target.userId };
 }

@@ -96,24 +96,92 @@ export default async function StudentDetailPage({ params }: PageProps) {
             <p>{formatDate(student.enrollmentDate)}</p>
           </div>
           <div>
-            <p className="text-sm text-muted-foreground">Parent / Guardian</p>
-            <p>{student.parentName ?? "—"}</p>
-          </div>
-          <div>
-            <p className="text-sm text-muted-foreground">Parent Phone</p>
-            <p>{student.parentPhone ?? "—"}</p>
-          </div>
-          <div>
-            <p className="text-sm text-muted-foreground">Parent Email</p>
-            <p>{student.parentEmail ?? "—"}</p>
+            <p className="text-sm text-muted-foreground">Email Address</p>
+            <p>{student.emailAddress ?? "—"}</p>
           </div>
           <div>
             <p className="text-sm text-muted-foreground">Emergency Contact</p>
             <p>{student.emergencyContact ?? "—"}</p>
           </div>
           <div className="sm:col-span-2">
-            <p className="text-sm text-muted-foreground">Address</p>
-            <p>{student.address ?? "—"}</p>
+            <p className="text-sm text-muted-foreground">Street Address</p>
+            <p>{student.streetAddress ?? "—"}</p>
+          </div>
+          <div>
+            <p className="text-sm text-muted-foreground">City</p>
+            <p>{student.city ?? "—"}</p>
+          </div>
+          <div>
+            <p className="text-sm text-muted-foreground">State / Province</p>
+            <p>{student.stateProvince ?? "—"}</p>
+          </div>
+          <div>
+            <p className="text-sm text-muted-foreground">Zip / Postal Code</p>
+            <p>{student.zipPostalCode ?? "—"}</p>
+          </div>
+          <div>
+            <p className="text-sm text-muted-foreground">Country</p>
+            <p>{student.country ?? "—"}</p>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Father / Guardian</CardTitle>
+        </CardHeader>
+        <CardContent className="grid gap-4 sm:grid-cols-2">
+          <div>
+            <p className="text-sm text-muted-foreground">Name</p>
+            <p>
+              {[student.fatherGuardianFirstName, student.fatherGuardianLastName]
+                .filter(Boolean)
+                .join(" ") || "—"}
+            </p>
+          </div>
+          <div>
+            <p className="text-sm text-muted-foreground">Mobile / WhatsApp</p>
+            <p>{student.fatherMobileWhatsappNumber ?? "—"}</p>
+          </div>
+          <div>
+            <p className="text-sm text-muted-foreground">Parental responsibility</p>
+            <p>
+              {student.fatherParentalResponsibility == null
+                ? "—"
+                : student.fatherParentalResponsibility
+                  ? "Yes"
+                  : "No"}
+            </p>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Mother / Guardian</CardTitle>
+        </CardHeader>
+        <CardContent className="grid gap-4 sm:grid-cols-2">
+          <div>
+            <p className="text-sm text-muted-foreground">Name</p>
+            <p>
+              {[student.motherGuardianFirstName, student.motherGuardianLastName]
+                .filter(Boolean)
+                .join(" ") || "—"}
+            </p>
+          </div>
+          <div>
+            <p className="text-sm text-muted-foreground">Mobile / WhatsApp</p>
+            <p>{student.motherMobileWhatsappNumber ?? "—"}</p>
+          </div>
+          <div>
+            <p className="text-sm text-muted-foreground">Parental responsibility</p>
+            <p>
+              {student.motherParentalResponsibility == null
+                ? "—"
+                : student.motherParentalResponsibility
+                  ? "Yes"
+                  : "No"}
+            </p>
           </div>
         </CardContent>
       </Card>
@@ -130,7 +198,7 @@ export default async function StudentDetailPage({ params }: PageProps) {
                   <th className="pb-3 pr-4 font-medium">Year</th>
                   <th className="pb-3 pr-4 font-medium">School</th>
                   <th className="pb-3 pr-4 font-medium">Grade</th>
-                  <th className="pb-3 pr-4 font-medium">Teacher</th>
+                  <th className="pb-3 pr-4 font-medium">Staff</th>
                   <th className="pb-3 pr-4 font-medium">Status</th>
                   <th className="pb-3 font-medium">Actions</th>
                 </tr>
@@ -142,8 +210,8 @@ export default async function StudentDetailPage({ params }: PageProps) {
                     <td className="py-3 pr-4">{e.school.name}</td>
                     <td className="py-3 pr-4">{e.classroom.name}</td>
                     <td className="py-3 pr-4">
-                      {e.teacher
-                        ? `${e.teacher.firstName} ${e.teacher.lastName}`
+                      {e.staff
+                        ? `${e.staff.firstName} ${e.staff.lastName}`
                         : "—"}
                     </td>
                     <td className="py-3">

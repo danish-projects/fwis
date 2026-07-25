@@ -4,6 +4,7 @@ import type {
   GenderCode,
   SessionTypeCode,
 } from "../../prisma/lookup-data";
+import type { StaffRoleCode } from "../../src/lib/roles/staff-positions";
 import {
   isValidStudentNumber,
   parseStudentNumber,
@@ -46,6 +47,30 @@ export function normalizeGender(value: string): GenderCode {
   throw new Error(`Invalid gender "${value}". Use MALE or FEMALE.`);
 }
 
+const STAFF_ROLE_ALIASES: Record<string, StaffRoleCode> = {
+  nigra: "NIGRA",
+  nigran: "NIGRA",
+  principal: "PRINCIPAL",
+  teacher: "TEACHER",
+  admin: "SCHOOL_ADMIN",
+  administrator: "SCHOOL_ADMIN",
+  school_admin: "SCHOOL_ADMIN",
+  "school admin": "SCHOOL_ADMIN",
+  substitute: "SUBSTITUTE",
+};
+
+export function normalizeStaffRole(value: string | undefined): StaffRoleCode {
+  const key = value?.trim().toLowerCase();
+  if (!key) return "TEACHER";
+  const role = STAFF_ROLE_ALIASES[key];
+  if (!role) {
+    throw new Error(
+      `Invalid staff_role "${value}". Use Nigran, Principal, School Admin, Teacher, or Substitute.`
+    );
+  }
+  return role;
+}
+
 export function normalizeAttendanceStatus(value: string): AttendanceStatusCode {
   const key = value.trim().toUpperCase();
   if (key === "PRESENT" || key === "P") return "PRESENT";
@@ -82,7 +107,10 @@ export function parseDate(value: string, label: string): Date {
   if (!iso) {
     throw new Error(`${label} must be YYYY-MM-DD (got "${value}").`);
   }
-  const date = new Date(`${trimmed}T00:00:00.000Z`);
+  const year = Number(iso[1]);
+  const month = Number(iso[2]);
+  const day = Number(iso[3]);
+  const date = new Date(Date.UTC(year, month - 1, day));
   if (Number.isNaN(date.getTime())) {
     throw new Error(`${label} is not a valid date (got "${value}").`);
   }

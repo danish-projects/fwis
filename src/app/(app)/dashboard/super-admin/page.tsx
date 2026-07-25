@@ -7,7 +7,7 @@ import { SundayAttendanceWidget } from "@/components/dashboard/sunday-attendance
 import { DashboardCalendarHighlights } from "@/components/dashboard/dashboard-calendar-highlights";
 import { StudentsStatCard } from "@/components/dashboard/students-stat-card";
 import { HealthScoreStatCard } from "@/components/dashboard/health-score-stat-card";
-import { TeachersStatCard } from "@/components/dashboard/teachers-stat-card";
+import { StaffStatCard } from "@/components/dashboard/staff-stat-card";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatPercent } from "@/lib/utils";
 
@@ -16,7 +16,7 @@ export const metadata = { title: "Super Admin Dashboard" };
 const activeEnrollmentWhere = { deletedAt: null, status: "ACTIVE" as const };
 
 export default async function SuperAdminDashboardPage() {
-  await requireRole("SUPER_ADMIN");
+  await requireRole("NIGRA");
   const user = await getSessionUser();
   const selectedYear = user ? await getSelectedAcademicYear(user) : null;
 
@@ -31,16 +31,16 @@ export default async function SuperAdminDashboardPage() {
 
   const enrollmentWhere = { ...activeEnrollmentWhere, ...yearFilter };
 
-  const teacherWhere = { deletedAt: null, isActive: true };
+  const staffWhere = { deletedAt: null, isActive: true };
 
   const [
     schoolCount,
     studentCount,
     boyCount,
     girlCount,
-    teacherCount,
-    maleTeacherCount,
-    femaleTeacherCount,
+    staffCount,
+    maleStaffCount,
+    femaleStaffCount,
     schools,
     recentActivity,
   ] = await Promise.all([
@@ -52,9 +52,9 @@ export default async function SuperAdminDashboardPage() {
     prisma.studentEnrollment.count({
       where: { ...enrollmentWhere, student: { gender: "FEMALE" } },
     }),
-    prisma.teacher.count({ where: teacherWhere }),
-    prisma.teacher.count({ where: { ...teacherWhere, gender: "MALE" } }),
-    prisma.teacher.count({ where: { ...teacherWhere, gender: "FEMALE" } }),
+    prisma.staff.count({ where: staffWhere }),
+    prisma.staff.count({ where: { ...staffWhere, gender: "MALE" } }),
+    prisma.staff.count({ where: { ...staffWhere, gender: "FEMALE" } }),
     prisma.school.findMany({
       where: { deletedAt: null, isActive: true },
       include: {
@@ -125,11 +125,11 @@ export default async function SuperAdminDashboardPage() {
 
         <StudentsStatCard total={studentCount} boys={boyCount} girls={girlCount} />
 
-        <TeachersStatCard
-          label="Total Teachers"
-          total={teacherCount}
-          male={maleTeacherCount}
-          female={femaleTeacherCount}
+        <StaffStatCard
+          label="Total Staff"
+          total={staffCount}
+          male={maleStaffCount}
+          female={femaleStaffCount}
         />
 
         <HealthScoreStatCard value={formatPercent(avgHealth)} />
@@ -171,7 +171,7 @@ export default async function SuperAdminDashboardPage() {
                   {log.school ? ` · ${log.school.name}` : ""}
                 </p>
                 <p className="text-muted-foreground">
-                  {log.user?.email ?? "System"} ·{" "}
+                  {log.user?.userId ?? "System"} ·{" "}
                   {new Date(log.createdAt).toLocaleString()}
                 </p>
               </div>

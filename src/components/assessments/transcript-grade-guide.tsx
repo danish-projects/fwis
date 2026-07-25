@@ -101,6 +101,7 @@ export function TranscriptGradeGuide({ gradingScale }: TranscriptGradeGuideProps
               .sort((a, b) => b.minPct - a.minPct)
               .map((band) => `${band.letter} ≥ ${band.minPct}%`)
               .join(", ")}
+            {`; below ${gradingScale.passMinPct}% = Fail (D)`}
           </p>
         </CardContent>
       )}

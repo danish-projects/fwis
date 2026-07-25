@@ -281,9 +281,10 @@ export function LessonPlansView({ data, pagePath }: LessonPlansViewProps) {
           </CardHeader>
           <CardContent className="space-y-2 text-sm text-muted-foreground">
             <p>
-              Set the FWIS Docs Google Drive folder ID on the selected academic
-              year and add Google service account credentials in the server
-              environment.
+              Set{" "}
+              <code className="text-xs">GOOGLE_DRIVE_FWIS_DOCS_FOLDER_ID</code>{" "}
+              and Google service account credentials in the server environment.
+              Year folders are matched by academic year name under FWIS Docs.
             </p>
             <p>
               {data.academicYearName ? (

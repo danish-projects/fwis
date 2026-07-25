@@ -36,7 +36,6 @@ export const MOCK_YEAR = {
   name: "2025-2026",
   startDate: new Date("2025-08-01"),
   endDate: new Date("2026-06-30"),
-  docsDriveFolderId: "mock-drive-folder-2025",
 } as const;
 
 export function mockUser(
@@ -45,12 +44,13 @@ export function mockUser(
 ): AuthUser {
   return {
     id: "u0000000-0000-4000-8000-000000000001",
-    email: "test@fwis.org",
+    userId: "test.user",
     fullName: "Test User",
     roles,
-    schoolIds: roles.includes("SUPER_ADMIN") ? [] : [IDS.schoolHou],
+    schoolIds: roles.includes("NIGRA") ? [] : [IDS.schoolHou],
     classroomIds: roles.includes("TEACHER") ? [IDS.classroomG1Boys] : [],
     gender: roles.includes("TEACHER") ? "MALE" : null,
+    isSubstituteTeacher: false,
     ...overrides,
   };
 }

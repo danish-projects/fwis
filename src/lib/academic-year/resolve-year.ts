@@ -5,6 +5,7 @@ import {
   ACADEMIC_YEAR_COOKIE,
   type AcademicYearSummary,
 } from "@/lib/academic-year/constants";
+import { canSwitchAcademicYear } from "@/lib/academic-year/can-switch-year";
 import { findCurrentAcademicYearSchoolForSchool } from "@/lib/academic-year/find-current-year";
 import { listAcademicYearsForUser } from "@/lib/academic-year/list-years";
 
@@ -21,7 +22,7 @@ async function assertUserCanAccessYear(user: AuthUser, yearId: string) {
   if (!year) return null;
 
   if (
-    !user.roles.includes("SUPER_ADMIN") &&
+    !user.roles.includes("NIGRA") &&
     !year.schoolLinks.some((link) => user.schoolIds.includes(link.schoolId))
   ) {
     return null;
@@ -63,6 +64,11 @@ export async function resolveSelectedAcademicYear(
   const available = await listAcademicYearsForUser(user);
   if (available.length === 0) return null;
 
+  // Teachers / substitutes: always current year — ignore cookie selection.
+  if (!canSwitchAcademicYear(user.roles)) {
+    return defaultYearForUser(user, available);
+  }
+
   if (cookieYearId) {
     const allowed = await assertUserCanAccessYear(user, cookieYearId);
     if (allowed) {
@@ -78,7 +84,9 @@ export async function getSelectedAcademicYear(
   user: AuthUser
 ): Promise<AcademicYearSummary | null> {
   const cookieStore = await cookies();
-  const cookieYearId = cookieStore.get(ACADEMIC_YEAR_COOKIE)?.value;
+  const cookieYearId = canSwitchAcademicYear(user.roles)
+    ? cookieStore.get(ACADEMIC_YEAR_COOKIE)?.value
+    : null;
   return resolveSelectedAcademicYear(user, cookieYearId);
 }
 
@@ -86,6 +94,8 @@ export async function resolveAcademicYearSchoolForSchool(
   schoolId: string,
   selectedYear: AcademicYearSummary | null
 ) {
+  if (!schoolId) return null;
+
   if (selectedYear) {
     const schoolYear = await prisma.academicYearSchool.findFirst({
       where: {
@@ -109,12 +119,13 @@ export async function resolveAcademicYearSchoolIdsForSchools(
   selectedYear: AcademicYearSummary | null
 ) {
   const map = new Map<string, string>();
-  if (schoolIds.length === 0) return map;
+  const validSchoolIds = schoolIds.filter((id) => Boolean(id));
+  if (validSchoolIds.length === 0) return map;
 
   if (selectedYear) {
     const links = await prisma.academicYearSchool.findMany({
       where: {
-        schoolId: { in: schoolIds },
+        schoolId: { in: validSchoolIds },
         academicYearId: selectedYear.id,
         deletedAt: null,
       },
@@ -125,7 +136,7 @@ export async function resolveAcademicYearSchoolIdsForSchools(
     }
   }
 
-  const missing = schoolIds.filter((id) => !map.has(id));
+  const missing = validSchoolIds.filter((id) => !map.has(id));
   await Promise.all(
     missing.map(async (schoolId) => {
       const link = await findCurrentAcademicYearSchoolForSchool(schoolId);

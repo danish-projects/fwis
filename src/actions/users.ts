@@ -18,16 +18,16 @@ import {
   type CreateUserInput,
   type UserInput,
 } from "@/lib/validations/user";
-import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import { hashPassword } from "@/lib/auth/password";
 
 function normalizeUserInput(data: UserInput) {
   const parsed = userSchema.parse(data);
   return {
-    email: parsed.email.trim().toLowerCase(),
+    userId: parsed.userId,
     fullName: parsed.fullName.trim(),
     password: parsed.password,
     roleCodes: parsed.roleCodes,
-    schoolIds: parsed.roleCodes.includes("SUPER_ADMIN") ? [] : parsed.schoolIds,
+    schoolIds: parsed.roleCodes.includes("NIGRA") ? [] : parsed.schoolIds,
     gender:
       parsed.roleCodes.includes("SCHOOL_ADMIN") && parsed.roleCodes.length === 1
         ? (parsed.gender ?? null)
@@ -61,10 +61,17 @@ async function syncUserSchools(userId: string, schoolIds: string[]) {
   });
 }
 
-async function linkTeacherByEmail(userId: string, email: string) {
-  await prisma.teacher.updateMany({
-    where: { email, deletedAt: null, userId: null },
-    data: { userId },
+async function linkStaffByLogin(loginUserId: string) {
+  await prisma.staff.updateMany({
+    where: {
+      OR: [
+        { email: loginUserId },
+        { email: `${loginUserId}@fwis.org` },
+      ],
+      deletedAt: null,
+      userId: null,
+    },
+    data: { userId: loginUserId },
   });
 }
 
@@ -87,35 +94,35 @@ export async function getUsers(rawParams: {
       : {}),
     ...(params.schoolId
       ? { schools: { some: { schoolId: params.schoolId } } }
-      : !user.roles.includes("SUPER_ADMIN")
+      : !user.roles.includes("NIGRA")
         ? { schools: { some: { schoolId: { in: user.schoolIds } } } }
         : {}),
     ...(search
       ? {
           OR: [
-            { email: { contains: search, mode: "insensitive" } },
+            { userId: { contains: search, mode: "insensitive" } },
             { fullName: { contains: search, mode: "insensitive" } },
           ],
         }
       : {}),
   };
 
-  if (!user.roles.includes("SUPER_ADMIN")) {
+  if (!user.roles.includes("NIGRA")) {
     where.NOT = {
-      roles: { some: { role: { code: "SUPER_ADMIN" } } },
+      roles: { some: { role: { code: "NIGRA" } } },
     };
   }
 
   const [data, total] = await Promise.all([
     prisma.appUser.findMany({
       where,
-      orderBy: [{ fullName: "asc" }, { email: "asc" }],
+      orderBy: [{ fullName: "asc" }, { userId: "asc" }],
       skip: (params.page - 1) * params.pageSize,
       take: params.pageSize,
       include: {
         roles: { include: { role: true } },
         schools: { include: { school: { select: { id: true, name: true } } } },
-        teacher: { select: { id: true } },
+        staff: { select: { id: true } },
       },
     }),
     prisma.appUser.count({ where }),
@@ -141,14 +148,21 @@ export async function getUserById(id: string) {
     include: {
       roles: { include: { role: true } },
       schools: { include: { school: true } },
-      teacher: {
+      staff: {
         include: {
           school: { select: { id: true, name: true } },
-          classrooms: {
+          assignments: {
             include: {
+              role: { select: { code: true, name: true } },
               classroom: {
                 include: { grade: true, section: true },
               },
+              academicYearSchool: {
+                include: { academicYear: { select: { name: true } } },
+              },
+            },
+            orderBy: {
+              academicYearSchool: { academicYear: { startDate: "desc" } },
             },
           },
         },
@@ -163,7 +177,7 @@ export async function getUserFormOptions() {
   const [roles, schools] = await Promise.all([
     prisma.role.findMany({ orderBy: { id: "asc" } }),
     prisma.school.findMany({
-      where: user.roles.includes("SUPER_ADMIN")
+      where: user.roles.includes("NIGRA")
         ? { deletedAt: null, isActive: true }
         : { id: { in: user.schoolIds }, deletedAt: null, isActive: true },
       orderBy: { name: "asc" },
@@ -171,9 +185,9 @@ export async function getUserFormOptions() {
     }),
   ]);
 
-  const assignableRoles = user.roles.includes("SUPER_ADMIN")
+  const assignableRoles = user.roles.includes("NIGRA")
     ? roles
-    : roles.filter((r) => r.code !== "SUPER_ADMIN");
+    : roles.filter((r) => r.code !== "NIGRA");
 
   return { roles: assignableRoles, schools };
 }
@@ -186,27 +200,20 @@ export async function createUser(data: CreateUserInput) {
   await assertUserSchoolAccess(actor, input.schoolIds);
 
   const duplicate = await prisma.appUser.findUnique({
-    where: { email: input.email },
+    where: { userId: input.userId },
   });
   if (duplicate) {
-    throw new Error("A user with this email already exists");
+    throw new Error("A user with this user id already exists");
   }
 
   const userId = randomUUID();
-  const supabase = createSupabaseAdminClient();
-  const { error: authError } = await supabase.auth.admin.createUser({
-    id: userId,
-    email: input.email,
-    password: input.password!,
-    email_confirm: true,
-    user_metadata: { full_name: input.fullName },
-  });
-  if (authError) throw new Error(authError.message);
+  const passwordHash = await hashPassword(input.password!);
 
   const appUser = await prisma.appUser.create({
     data: {
       id: userId,
-      email: input.email,
+      userId: input.userId,
+      passwordHash,
       fullName: input.fullName,
       gender: input.gender,
       isActive: input.isActive,
@@ -216,7 +223,7 @@ export async function createUser(data: CreateUserInput) {
   await syncUserRoles(userId, input.roleCodes);
   await syncUserSchools(userId, input.schoolIds);
   if (input.roleCodes.includes("TEACHER")) {
-    await linkTeacherByEmail(userId, input.email);
+    await linkStaffByLogin(input.userId);
   }
 
   await createAuditLog({
@@ -243,11 +250,11 @@ export async function updateUser(id: string, data: UserInput) {
   assertAssignableRoles(actor, input.roleCodes);
   await assertUserSchoolAccess(actor, input.schoolIds);
 
-  if (input.email !== existing.email) {
+  if (input.userId !== existing.userId) {
     const duplicate = await prisma.appUser.findFirst({
-      where: { email: input.email, id: { not: id } },
+      where: { userId: input.userId, id: { not: id } },
     });
-    if (duplicate) throw new Error("A user with this email already exists");
+    if (duplicate) throw new Error("A user with this user id already exists");
   }
 
   const before = await prisma.appUser.findUnique({
@@ -256,30 +263,14 @@ export async function updateUser(id: string, data: UserInput) {
   });
   if (!before) throw new Error("User not found");
 
-  const supabase = createSupabaseAdminClient();
-  const authUpdate: {
-    email?: string;
-    password?: string;
-    user_metadata?: { full_name: string };
-  } = {
-    email: input.email,
-    user_metadata: { full_name: input.fullName },
-  };
-  if (input.password) authUpdate.password = input.password;
-
-  const { error: authError } = await supabase.auth.admin.updateUserById(
-    id,
-    authUpdate
-  );
-  if (authError) throw new Error(authError.message);
-
   const appUser = await prisma.appUser.update({
     where: { id },
     data: {
-      email: input.email,
+      userId: input.userId,
       fullName: input.fullName,
       gender: input.gender,
       isActive: input.isActive,
+      ...(input.password ? { passwordHash: await hashPassword(input.password) } : {}),
     },
   });
 
@@ -287,10 +278,10 @@ export async function updateUser(id: string, data: UserInput) {
   await syncUserSchools(id, input.schoolIds);
 
   if (input.roleCodes.includes("TEACHER")) {
-    await linkTeacherByEmail(id, input.email);
+    await linkStaffByLogin(input.userId);
   } else {
-    await prisma.teacher.updateMany({
-      where: { userId: id },
+    await prisma.staff.updateMany({
+      where: { userId: appUser.userId },
       data: { userId: null },
     });
   }
@@ -332,8 +323,8 @@ export async function deleteUser(id: string) {
     data: { isActive: false },
   });
 
-  await prisma.teacher.updateMany({
-    where: { userId: id },
+  await prisma.staff.updateMany({
+    where: { userId: before.userId },
     data: { userId: null },
   });
 

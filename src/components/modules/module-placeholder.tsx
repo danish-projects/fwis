@@ -17,8 +17,9 @@ export function ModulePlaceholder({ title, description }: ModulePlaceholderProps
           <CardTitle>Module Ready</CardTitle>
         </CardHeader>
         <CardContent className="text-muted-foreground">
-          Database schema, permissions, and navigation are configured. Connect
-          Supabase and run migrations to activate full CRUD for this module.
+          Database schema, permissions, and navigation are configured. Run
+          migrations and connect your PostgreSQL database to activate full CRUD
+          for this module.
         </CardContent>
       </Card>
     </div>

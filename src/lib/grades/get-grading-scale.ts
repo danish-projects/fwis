@@ -78,7 +78,7 @@ export async function loadGradingScale(): Promise<GradingScaleConfig> {
 
 export const getGradingScale = unstable_cache(
   loadGradingScale,
-  ["grading-scale-config"],
+  ["grading-scale-config-v3"],
   { tags: ["grading-scale"] }
 );
 

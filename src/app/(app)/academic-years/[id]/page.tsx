@@ -49,12 +49,16 @@ export default async function AcademicYearDetailPage({ params }: PageProps) {
             <p className="font-medium">{formatDate(year.endDate)}</p>
           </div>
           <div className="sm:col-span-2">
-            <p className="text-sm text-muted-foreground">FWIS Docs folder ID</p>
-            <p className="font-mono text-sm break-all">
-              {year.docsDriveFolderId ?? "—"}
+            <p className="text-sm text-muted-foreground">Lesson plans (Drive)</p>
+            <p className="text-sm">
+              Resolved by year name under FWIS Docs:{" "}
+              <span className="font-medium">
+                FWIS Docs/{year.name}/Lesson Plans/&lt;grade&gt;
+              </span>
             </p>
             <p className="mt-1 text-xs text-muted-foreground">
-              Lesson plans: FWIS Docs/{year.name}/Lesson Plans/&lt;grade&gt;
+              Parent folder ID is set via{" "}
+              <code className="text-xs">GOOGLE_DRIVE_FWIS_DOCS_FOLDER_ID</code>.
             </p>
           </div>
         </CardContent>

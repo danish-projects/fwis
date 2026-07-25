@@ -127,7 +127,7 @@ export default async function EnrollmentsPage({ searchParams }: PageProps) {
                   <th className="pb-3 pr-4 font-medium">Student</th>
                   <th className="pb-3 pr-4 font-medium">School / Year</th>
                   <th className="pb-3 pr-4 font-medium">Classroom</th>
-                  <th className="pb-3 pr-4 font-medium">Teacher</th>
+                  <th className="pb-3 pr-4 font-medium">Staff</th>
                   <th className="pb-3 pr-4 font-medium">Final Grade</th>
                   <th className="pb-3 pr-4 font-medium">Status</th>
                   <th className="pb-3 font-medium">Actions</th>
@@ -150,8 +150,8 @@ export default async function EnrollmentsPage({ searchParams }: PageProps) {
                     </td>
                     <td className="py-3 pr-4">{e.classroom.name}</td>
                     <td className="py-3 pr-4">
-                      {e.teacher
-                        ? `${e.teacher.firstName} ${e.teacher.lastName}`
+                      {e.staff
+                        ? `${e.staff.firstName} ${e.staff.lastName}`
                         : "—"}
                     </td>
                     <td className="py-3 pr-4">

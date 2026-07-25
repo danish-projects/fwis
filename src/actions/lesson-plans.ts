@@ -45,7 +45,6 @@ export type LessonPlanPageData = {
   schoolName: string;
   academicYearName: string | null;
   driveConfigured: boolean;
-  docsDriveFolderId: string | null;
   grades: LessonPlanGradeOption[];
   weeks: LessonPlanWeekOption[];
   selectedGradeId: number | null;
@@ -62,16 +61,15 @@ export type LessonPlanPageData = {
   missingReasons: string[];
 };
 
-type DocsDriveFolderContext = {
+type AcademicYearDriveContext = {
   academicYearId: string;
   academicYearName: string;
-  docsDriveFolderId: string | null;
 };
 
-async function resolveDocsDriveFolderForSchool(
+async function resolveAcademicYearDriveContext(
   user: AuthUser,
   schoolId: string
-): Promise<DocsDriveFolderContext | null> {
+): Promise<AcademicYearDriveContext | null> {
   const selectedYear = await getSelectedAcademicYear(user);
   const schoolYear = await resolveAcademicYearForSchool(schoolId, selectedYear);
   if (!schoolYear) return null;
@@ -79,7 +77,6 @@ async function resolveDocsDriveFolderForSchool(
   return {
     academicYearId: schoolYear.academicYearId,
     academicYearName: schoolYear.academicYear.name,
-    docsDriveFolderId: schoolYear.academicYear.docsDriveFolderId?.trim() || null,
   };
 }
 
@@ -95,7 +92,10 @@ async function listGradesForLessonPlans(
     >();
 
     for (const classroom of teacherClassrooms) {
-      if (classroom.schoolId !== schoolId) continue;
+      const belongs =
+        classroom.schoolId === schoolId ||
+        classroom.schoolLinks?.some((link) => link.schoolId === schoolId);
+      if (!belongs) continue;
       gradeMap.set(classroom.gradeId, {
         id: classroom.gradeId,
         name: classroom.grade.name,
@@ -109,7 +109,13 @@ async function listGradesForLessonPlans(
   }
 
   const classrooms = await prisma.classroom.findMany({
-    where: { schoolId, deletedAt: null, isActive: true },
+    where: {
+      schoolLinks: {
+        some: { schoolId, deletedAt: null, isActive: true },
+      },
+      deletedAt: null,
+      isActive: true,
+    },
     orderBy: [{ grade: { sortOrder: "asc" } }, { section: { name: "asc" } }],
     select: {
       grade: { select: { id: true, name: true, sortOrder: true } },
@@ -148,7 +154,7 @@ export async function getLessonPlanPageData(params?: {
   });
   if (!school) return null;
 
-  const docsFolder = await resolveDocsDriveFolderForSchool(user, school.id);
+  const yearContext = await resolveAcademicYearDriveContext(user, school.id);
   const selectedYear = await getSelectedAcademicYear(user);
   const academicYear = await resolveAcademicYearForSchool(
     school.id,
@@ -187,8 +193,8 @@ export async function getLessonPlanPageData(params?: {
       ? params.lessonPlanNumber
       : currentWeek?.lessonPlanNumber ?? weeks[0]?.lessonPlanNumber ?? null;
 
-  const docsDriveFolderId = docsFolder?.docsDriveFolderId ?? null;
-  const driveConfigured = isLessonPlanDriveReady() && Boolean(docsDriveFolderId);
+  const driveConfigured = isLessonPlanDriveReady();
+  const academicYearName = yearContext?.academicYearName ?? null;
 
   const selectedWeek =
     selectedLessonPlanNumber != null
@@ -219,12 +225,12 @@ export async function getLessonPlanPageData(params?: {
     selectedGrade &&
     selectedWeek &&
     selectedDay?.isInstructional &&
-    docsDriveFolderId &&
-    isLessonPlanDriveReady()
+    academicYearName &&
+    driveConfigured
   ) {
     try {
       const driveFile = await findLessonPlanDriveFile({
-        academicYearFolderId: docsDriveFolderId,
+        academicYearName,
         gradeName: selectedGrade.name,
         lessonPlanNumber: selectedWeek.lessonPlanNumber,
       });
@@ -244,8 +250,7 @@ export async function getLessonPlanPageData(params?: {
         missingReasons = buildMissingLessonPlanReasons({
           gradeName: selectedGrade.name,
           lessonPlanNumber: selectedWeek.lessonPlanNumber,
-          academicYearName: docsFolder?.academicYearName ?? null,
-          docsDriveFolderId,
+          academicYearName,
           driveConfigured,
         });
       }
@@ -262,8 +267,7 @@ export async function getLessonPlanPageData(params?: {
     missingReasons = buildMissingLessonPlanReasons({
       gradeName: selectedGrade.name,
       lessonPlanNumber: selectedWeek.lessonPlanNumber,
-      academicYearName: docsFolder?.academicYearName ?? null,
-      docsDriveFolderId,
+      academicYearName,
       driveConfigured,
     });
   }
@@ -271,9 +275,8 @@ export async function getLessonPlanPageData(params?: {
   return {
     schoolId: school.id,
     schoolName: school.name,
-    academicYearName: docsFolder?.academicYearName ?? null,
+    academicYearName,
     driveConfigured,
-    docsDriveFolderId,
     grades,
     weeks,
     selectedGradeId,
@@ -318,14 +321,15 @@ export async function getLessonPlanPdfForDownload(params: {
     throw new Error("Lesson plans are only available on instructional days");
   }
 
-  const docsFolder = await resolveDocsDriveFolderForSchool(user, params.schoolId);
-  const docsDriveFolderId = docsFolder?.docsDriveFolderId ?? null;
-  if (!docsDriveFolderId || !isLessonPlanDriveReady()) {
-    throw new Error("Lesson plan Google Drive is not configured for this academic year");
+  const yearContext = await resolveAcademicYearDriveContext(user, params.schoolId);
+  if (!yearContext || !isLessonPlanDriveReady()) {
+    throw new Error(
+      "Lesson plan Google Drive is not configured (set GOOGLE_DRIVE_FWIS_DOCS_FOLDER_ID and service account credentials)"
+    );
   }
 
   const driveFile = await findLessonPlanDriveFile({
-    academicYearFolderId: docsDriveFolderId,
+    academicYearName: yearContext.academicYearName,
     gradeName: grade.name,
     lessonPlanNumber: params.lessonPlanNumber,
   });
@@ -334,13 +338,9 @@ export async function getLessonPlanPdfForDownload(params: {
     throw new Error("Lesson plan PDF not found for the selected week");
   }
 
-  if (!docsFolder) {
-    throw new Error("Lesson plan Google Drive is not configured for this academic year");
-  }
-
   return {
     schoolId: params.schoolId,
-    academicYearId: docsFolder.academicYearId,
+    academicYearId: yearContext.academicYearId,
     gradeId: params.gradeId,
     lessonPlanNumber: params.lessonPlanNumber,
     fileId: driveFile.fileId,

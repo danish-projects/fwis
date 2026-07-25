@@ -137,8 +137,8 @@ async function purgeAll(): Promise<PurgeCounts> {
 
   const scoped = await deleteEnrollmentScopedData(enrollmentIds);
 
-  const teacherClassrooms = (await prisma.teacherClassroom.deleteMany()).count;
-  const teachers = (await prisma.teacher.deleteMany()).count;
+  const staffClassrooms = (await prisma.staffAssignment.deleteMany()).count;
+  const staff = (await prisma.staff.deleteMany()).count;
   const classrooms = (await prisma.classroom.deleteMany()).count;
   const calendarDays = (await prisma.academicCalendarDay.deleteMany()).count;
   const academicYears = (await prisma.academicYear.deleteMany()).count;
@@ -149,8 +149,8 @@ async function purgeAll(): Promise<PurgeCounts> {
 
   return {
     ...scoped,
-    teacherClassrooms,
-    teachers,
+    staffClassrooms,
+    staff,
     classrooms,
     calendarDays,
     academicYears,

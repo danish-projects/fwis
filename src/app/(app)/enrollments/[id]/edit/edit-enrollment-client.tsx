@@ -16,7 +16,7 @@ type EditEnrollmentData = {
   schoolId: string;
   academicYearId: string;
   classroomId: string;
-  teacherId: string | null;
+  staffId: string | null;
   enrollmentDate: string;
   status: string;
 };
@@ -68,7 +68,7 @@ export function EditEnrollmentClient({ id, enrollment, options }: Props) {
                 schoolId: enrollment.schoolId,
                 academicYearId: enrollment.academicYearId,
                 classroomId: enrollment.classroomId,
-                teacherId: enrollment.teacherId ?? "",
+                staffId: enrollment.staffId ?? "",
                 enrollmentDate: enrollment.enrollmentDate,
                 status: asEnrollmentStatus(enrollment.status),
               }}

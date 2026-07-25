@@ -12,6 +12,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { prisma } from "@/lib/prisma";
 import { formatPercent } from "@/lib/utils";
+import { pickSchoolLink } from "@/lib/classrooms/ensure-classroom-for-school";
+import { getSelectedSchool } from "@/lib/school/resolve-school";
 
 export const metadata = { title: "Teacher Dashboard" };
 
@@ -29,22 +31,37 @@ export default async function TeacherDashboardPage() {
     );
   }
 
-  const classroom = await prisma.classroom.findFirst({
-    where: { id: classroomId, deletedAt: null },
-    include: {
-      school: { select: { name: true } },
-      grade: true,
-      section: true,
-    },
-  });
+  const [classroom, selectedSchool] = await Promise.all([
+    prisma.classroom.findFirst({
+      where: { id: classroomId, deletedAt: null },
+      include: {
+        schoolLinks: {
+          where: { deletedAt: null, isActive: true },
+          include: { school: { select: { name: true } } },
+        },
+        grade: true,
+        section: true,
+      },
+    }),
+    getSelectedSchool(user),
+  ]);
 
   if (!classroom) {
     redirect("/unauthorized");
   }
 
+  const preferredSchoolIds = [
+    ...(selectedSchool ? [selectedSchool.id] : []),
+    ...user.schoolIds,
+  ];
+  const schoolLink = pickSchoolLink(classroom.schoolLinks, preferredSchoolIds);
+  if (!schoolLink) {
+    redirect("/unauthorized");
+  }
+
   const selectedYear = await getSelectedAcademicYear(user);
   const schoolYear = await resolveAcademicYearForSchool(
-    classroom.schoolId,
+    schoolLink.schoolId,
     selectedYear
   );
 
@@ -94,14 +111,14 @@ export default async function TeacherDashboardPage() {
       <div>
         <h1 className="text-2xl font-bold md:text-3xl">My Grade Dashboard</h1>
         <p className="text-muted-foreground">
-          {classroom.name} · {classroom.school.name}
+          {classroom.name} · {schoolLink.school.name}
           {schoolYear ? ` · ${schoolYear.academicYear.name}` : ""}
         </p>
       </div>
 
       {schoolYear && (
         <DashboardCalendarHighlights
-          schoolId={classroom.schoolId}
+          schoolId={schoolLink.schoolId}
           academicYearSchoolId={schoolYear.id}
           selectedYear={selectedYear}
         />

@@ -54,7 +54,7 @@ export default async function LessonPlansPage({ searchParams }: PageProps) {
       <div>
         <h1 className="text-2xl font-bold md:text-3xl">Lesson Plans</h1>
         <p className="text-muted-foreground">
-          Weekly lesson plan PDFs for {data.schoolName}
+          Course Materials · weekly lesson plan PDFs for {data.schoolName}
         </p>
       </div>
 

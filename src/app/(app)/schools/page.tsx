@@ -70,7 +70,6 @@ export default async function SchoolsPage({ searchParams }: PageProps) {
                   <th className="pb-3 pr-4 font-medium">Code</th>
                   <th className="pb-3 pr-4 font-medium">School</th>
                   <th className="pb-3 pr-4 font-medium">Location</th>
-                  <th className="pb-3 pr-4 font-medium">Principal</th>
                   <th className="pb-3 pr-4 font-medium">Status</th>
                   <th className="pb-3 font-medium">Actions</th>
                 </tr>
@@ -90,7 +89,6 @@ export default async function SchoolsPage({ searchParams }: PageProps) {
                     <td className="py-3 pr-4 text-muted-foreground">
                       {school.city}, {school.state}
                     </td>
-                    <td className="py-3 pr-4">{school.principalName ?? "—"}</td>
                     <td className="py-3 pr-4">
                       <Badge variant={school.isActive ? "success" : "secondary"}>
                         {school.isActive ? "Active" : "Inactive"}
@@ -107,7 +105,7 @@ export default async function SchoolsPage({ searchParams }: PageProps) {
                 ))}
                 {schools.length === 0 && (
                   <tr>
-                    <td colSpan={6} className="py-8 text-center text-muted-foreground">
+                    <td colSpan={5} className="py-8 text-center text-muted-foreground">
                       No schools found.
                     </td>
                   </tr>

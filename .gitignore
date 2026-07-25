@@ -49,3 +49,6 @@ yarn-error.log*
 next-env.d.ts
 
 /src/generated/prisma
+
+# Credentials PDF contains default passwords — do not commit
+/docs/FWIS-Default-Login-Credentials.pdf

@@ -1,6 +1,5 @@
 "use client";
 
-import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
 import { AppSidebar } from "@/components/layout/app-sidebar";
 import { AcademicYearCookieSync } from "@/components/layout/academic-year-cookie-sync";
@@ -17,6 +16,7 @@ type AppShellProps = {
   userEmail: string;
   academicYears: AcademicYearSummary[];
   selectedAcademicYearId: string | null;
+  canSwitchAcademicYear?: boolean;
   schools: SchoolSummary[];
   selectedSchoolId: string | null;
   isTeacher?: boolean;
@@ -29,6 +29,7 @@ export function AppShell({
   userEmail,
   academicYears,
   selectedAcademicYearId,
+  canSwitchAcademicYear = true,
   schools,
   selectedSchoolId,
   isTeacher = false,
@@ -36,8 +37,7 @@ export function AppShell({
   const router = useRouter();
 
   async function handleSignOut() {
-    const supabase = createClient();
-    await supabase.auth.signOut();
+    await fetch("/api/auth/sign-out", { method: "POST" });
     router.push("/login");
     router.refresh();
   }
@@ -52,6 +52,7 @@ export function AppShell({
         userEmail={userEmail}
         academicYears={academicYears}
         selectedAcademicYearId={selectedAcademicYearId}
+        canSwitchAcademicYear={canSwitchAcademicYear}
         schools={schools}
         selectedSchoolId={selectedSchoolId}
         onSignOut={handleSignOut}

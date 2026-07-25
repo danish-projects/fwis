@@ -12,37 +12,34 @@ export type SchoolYearDataCounts = {
 export async function getSchoolYearEnrollmentIds(
   prisma: PrismaClient,
   schoolId: string,
-  academicYearId: string
+  academicYearSchoolId: string
 ) {
-  const year = await prisma.academicYear.findFirst({
-    where: { id: academicYearId, schoolId, deletedAt: null },
+  const link = await prisma.academicYearSchool.findFirst({
+    where: { id: academicYearSchoolId, schoolId, deletedAt: null },
     select: { id: true },
   });
-  if (!year) {
+  if (!link) {
     throw new Error(
-      "Academic year does not belong to the specified school — aborting to protect other schools."
+      "Academic year school link does not belong to the specified school — aborting to protect other schools."
     );
   }
 
-  const enrollments = await prisma.studentEnrollment.findMany({
-    where: { schoolId, academicYearId, deletedAt: null },
+  return prisma.studentEnrollment.findMany({
+    where: { schoolId, academicYearSchoolId, deletedAt: null },
     select: { id: true, studentId: true },
   });
-
-  return enrollments;
 }
 
 export async function countSchoolYearImportData(
   prisma: PrismaClient,
   schoolId: string,
-  academicYearId: string
+  academicYearSchoolId: string
 ): Promise<SchoolYearDataCounts> {
-  await getSchoolYearEnrollmentIds(prisma, schoolId, academicYearId);
-
-  const enrollments = await prisma.studentEnrollment.findMany({
-    where: { schoolId, academicYearId, deletedAt: null },
-    select: { id: true },
-  });
+  const enrollments = await getSchoolYearEnrollmentIds(
+    prisma,
+    schoolId,
+    academicYearSchoolId
+  );
   const enrollmentIds = enrollments.map((e) => e.id);
 
   const [attendance, assessments, finalGrades, calendarDays] = await Promise.all([
@@ -62,7 +59,7 @@ export async function countSchoolYearImportData(
         })
       : 0,
     prisma.academicCalendarDay.count({
-      where: { academicYearId, deletedAt: null },
+      where: { academicYearSchoolId, deletedAt: null },
     }),
   ]);
 
@@ -87,18 +84,17 @@ export function hasExistingSchoolYearData(counts: SchoolYearDataCounts): boolean
 }
 
 /**
- * Deletes import-related data for ONE school + academic year only.
- * Does not touch other schools, other academic years, or the school/year records themselves.
+ * Deletes import-related data for ONE school + academic year school link only.
  */
 export async function purgeSchoolYearImportData(
   prisma: PrismaClient,
   schoolId: string,
-  academicYearId: string
+  academicYearSchoolId: string
 ): Promise<SchoolYearDataCounts> {
   const enrollments = await getSchoolYearEnrollmentIds(
     prisma,
     schoolId,
-    academicYearId
+    academicYearSchoolId
   );
   const enrollmentIds = enrollments.map((e) => e.id);
   const studentIds = [...new Set(enrollments.map((e) => e.studentId))];
@@ -124,12 +120,12 @@ export async function purgeSchoolYearImportData(
     finalGrades = finalGradeResult.count;
 
     await prisma.studentEnrollment.deleteMany({
-      where: { id: { in: enrollmentIds }, schoolId, academicYearId },
+      where: { id: { in: enrollmentIds }, schoolId, academicYearSchoolId },
     });
   }
 
   const calendarResult = await prisma.academicCalendarDay.deleteMany({
-    where: { academicYearId },
+    where: { academicYearSchoolId },
   });
 
   let orphanStudentsRemoved = 0;

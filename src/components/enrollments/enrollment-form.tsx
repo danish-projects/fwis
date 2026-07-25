@@ -62,7 +62,7 @@ export function EnrollmentForm({
   const [schoolId, setSchoolId] = useState(initialSchoolId);
   const [academicYearId, setAcademicYearId] = useState(initialYearId);
   const [classroomId, setClassroomId] = useState(defaultValues?.classroomId ?? "");
-  const [teacherId, setTeacherId] = useState(defaultValues?.teacherId ?? "");
+  const [staffId, setStaffId] = useState(defaultValues?.staffId ?? "");
   const [studentId, setStudentId] = useState(
     defaultValues?.studentId ?? preferredStudentId ?? ""
   );
@@ -86,19 +86,19 @@ export function EnrollmentForm({
     [options.classrooms, schoolId]
   );
 
-  const filteredTeachers = useMemo(() => {
-    const matchesGrade = options.teachers.filter((teacher) => {
-      if (schoolId && teacher.schoolId !== schoolId) return false;
-      if (classroomId) return teacher.classroomId === classroomId;
+  const filteredStaff = useMemo(() => {
+    const matchesGrade = options.staff.filter((staff) => {
+      if (schoolId && staff.schoolId !== schoolId) return false;
+      if (classroomId) return staff.classroomId === classroomId;
       return true;
     });
 
-    const keepTeacherId = teacherId || defaultValues?.teacherId;
+    const keepStaffId = staffId || defaultValues?.staffId;
     if (
-      keepTeacherId &&
-      !matchesGrade.some((teacher) => teacher.id === keepTeacherId)
+      keepStaffId &&
+      !matchesGrade.some((staff) => staff.id === keepStaffId)
     ) {
-      const assigned = options.teachers.find((teacher) => teacher.id === keepTeacherId);
+      const assigned = options.staff.find((staff) => staff.id === keepStaffId);
       if (assigned && (!schoolId || assigned.schoolId === schoolId)) {
         return [...matchesGrade, assigned].sort(
           (a, b) =>
@@ -108,19 +108,19 @@ export function EnrollmentForm({
     }
 
     return matchesGrade;
-  }, [options.teachers, schoolId, classroomId, teacherId, defaultValues?.teacherId]);
+  }, [options.staff, schoolId, classroomId, staffId, defaultValues?.staffId]);
 
   useEffect(() => {
-    if (teacherId && !filteredTeachers.some((teacher) => teacher.id === teacherId)) {
-      setTeacherId("");
+    if (staffId && !filteredStaff.some((staff) => staff.id === staffId)) {
+      setStaffId("");
     } else if (
-      !teacherId &&
-      filteredTeachers.length === 1 &&
+      !staffId &&
+      filteredStaff.length === 1 &&
       classroomId
     ) {
-      setTeacherId(filteredTeachers[0].id);
+      setStaffId(filteredStaff[0].id);
     }
-  }, [filteredTeachers, teacherId, classroomId]);
+  }, [filteredStaff, staffId, classroomId]);
 
   useEffect(() => {
     if (!schoolId || !academicYearId) {
@@ -177,7 +177,7 @@ export function EnrollmentForm({
       schoolId: form.get("schoolId") as string,
       academicYearId: form.get("academicYearId") as string,
       classroomId: form.get("classroomId") as string,
-      teacherId: (form.get("teacherId") as string) || "",
+      staffId: (form.get("staffId") as string) || "",
       enrollmentDate: (form.get("enrollmentDate") as string) || undefined,
       status: form.get("status") as EnrollmentInput["status"],
     });
@@ -209,7 +209,7 @@ export function EnrollmentForm({
             setSchoolId(nextSchoolId);
             setAcademicYearId(nextSchoolId ? pickDefaultYearId(options, nextSchoolId) : "");
             setClassroomId("");
-            setTeacherId("");
+            setStaffId("");
             setStudentId("");
           }}
           className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
@@ -284,7 +284,7 @@ export function EnrollmentForm({
           disabled={!schoolId}
           onChange={(e) => {
             setClassroomId(e.target.value);
-            setTeacherId("");
+            setStaffId("");
           }}
           className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-50"
         >
@@ -298,23 +298,23 @@ export function EnrollmentForm({
       </div>
 
       <div className="space-y-2">
-        <Label htmlFor="teacherId">Teacher</Label>
+        <Label htmlFor="staffId">Staff</Label>
         <select
-          id="teacherId"
-          name="teacherId"
-          value={teacherId}
+          id="staffId"
+          name="staffId"
+          value={staffId}
           disabled={!classroomId}
-          onChange={(e) => setTeacherId(e.target.value)}
+          onChange={(e) => setStaffId(e.target.value)}
           className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-50"
         >
           <option value="">
             {!classroomId
               ? "Select grade first"
-              : filteredTeachers.length === 0
-                ? "No teacher assigned to this grade"
+              : filteredStaff.length === 0
+                ? "No staff assigned to this grade"
                 : "None assigned"}
           </option>
-          {filteredTeachers.map((t) => (
+          {filteredStaff.map((t) => (
             <option key={t.id} value={t.id}>
               {t.firstName} {t.lastName}
             </option>

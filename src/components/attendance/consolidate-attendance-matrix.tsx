@@ -17,6 +17,7 @@ import {
 import { SESSION_TYPE_LABELS } from "@/lib/calendar/generate-sundays";
 import { ConsolidateMatrixRow } from "@/components/attendance/consolidate-matrix-row";
 import { WeekColumnFilterSelect } from "@/components/attendance/week-column-filter-select";
+import { MatrixExportButton } from "@/components/export/matrix-export-button";
 import { useVirtualScroll } from "@/hooks/use-virtual-scroll";
 import { Button } from "@/components/ui/button";
 import { formatLessonPlanLabel } from "@/lib/calendar/lesson-plan";
@@ -117,6 +118,14 @@ export function ConsolidateAttendanceMatrix({
   const [isLoading, startLoadTransition] = useTransition();
   const [weekFilter, setWeekFilter] = useState<WeekColumnFilter>(ALL_WEEKS_VALUE);
   const showGradeColumn = classroomFilter === ALL_CLASSROOMS_VALUE;
+
+  const exportUrl = useMemo(() => {
+    const params = new URLSearchParams({
+      schoolId,
+      classroom: classroomFilter,
+    });
+    return `/api/export/attendance-matrix?${params.toString()}`;
+  }, [schoolId, classroomFilter]);
 
   const visibleCalendarDays = useMemo(
     () => filterCalendarDays(calendarDays, weekFilter),
@@ -304,6 +313,10 @@ export function ConsolidateAttendanceMatrix({
           value={weekFilter}
           onChange={setWeekFilter}
           id="consolidateWeek"
+        />
+        <MatrixExportButton
+          exportUrl={exportUrl}
+          disabled={students.length === 0 || isLoading}
         />
       </div>
 

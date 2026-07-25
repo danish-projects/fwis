@@ -3,18 +3,26 @@ import { listPaginationSchema } from "@/lib/validations/pagination";
 
 export const schoolSchema = z.object({
   name: z.string().min(2, "School name is required"),
-  address: z.string().optional(),
+  address: z.string().min(2, "Address is required"),
   city: z.string().min(2, "City is required"),
-  cityCode: z
-    .string()
-    .regex(/^[A-Z]{3}$/, "City code must be 3 uppercase letters")
-    .optional(),
+  cityCode: z.preprocess(
+    (value) => {
+      if (value == null || value === "") return undefined;
+      if (typeof value === "string") return value.trim().toUpperCase();
+      return value;
+    },
+    z
+      .string()
+      .regex(/^[A-Z]{3}$/, "School code must be exactly 3 letters")
+      .optional()
+  ),
   state: z.string().min(2, "State is required"),
-  zipCode: z.string().optional(),
+  zipCode: z.string().min(2, "Postal code is required"),
   phone: z.string().optional(),
   email: z.string().email("Invalid email").optional().or(z.literal("")),
-  principalName: z.string().optional(),
-    isActive: z.boolean().default(true),
+  isActive: z.boolean().default(true),
+  /** Create principal, section admins, grade teachers (G1–G6), and substitutes in app_users. */
+  createDefaultUsers: z.boolean().default(false),
 });
 
 export type SchoolInput = z.infer<typeof schoolSchema>;

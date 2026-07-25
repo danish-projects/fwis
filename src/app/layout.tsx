@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
 import { cookies } from "next/headers";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Geist, Geist_Mono, Fraunces, Source_Sans_3 } from "next/font/google";
 import { ThemeProvider } from "@/components/providers/theme-provider";
 import { GlobalLoadingProvider } from "@/components/providers/global-loading-provider";
 import { AppToaster } from "@/components/providers/app-toaster";
@@ -22,13 +22,23 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
+const landingDisplay = Fraunces({
+  variable: "--font-landing-display",
+  subsets: ["latin"],
+});
+
+const landingBody = Source_Sans_3({
+  variable: "--font-landing-body",
+  subsets: ["latin"],
+});
+
 export const metadata: Metadata = {
   title: {
     default: "FWIS | Faizan Weekend Islamic School",
     template: "%s | FWIS",
   },
   description:
-    "Faizan Weekend Islamic School Management System — multi-school administration for attendance, academics, and reporting.",
+    "Faizan Weekend Islamic School — free weekend Islamic education from Dawat-e-Islami USA, with a secure staff portal for attendance, academics, and campus management.",
 };
 
 export default async function RootLayout({
@@ -43,7 +53,7 @@ export default async function RootLayout({
   return (
     <html lang="en" className={themeClass} suppressHydrationWarning>
       <body
-        className={`${geistSans.variable} ${geistMono.variable} min-h-screen antialiased`}
+        className={`${geistSans.variable} ${geistMono.variable} ${landingDisplay.variable} ${landingBody.variable} min-h-screen antialiased`}
       >
         <ThemeProvider initialTheme={themeSetting}>
           <Suspense fallback={null}>

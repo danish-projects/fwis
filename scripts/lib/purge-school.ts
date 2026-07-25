@@ -5,8 +5,8 @@ export type PurgeCounts = {
   assessments: number;
   finalGrades: number;
   enrollments: number;
-  teacherClassrooms: number;
-  teachers: number;
+  staffClassrooms: number;
+  staff: number;
   classrooms: number;
   calendarDays: number;
   academicYears: number;
@@ -85,45 +85,52 @@ export async function purgeSchool(
 
   const scoped = await deleteEnrollmentScopedData(prisma, enrollmentIds);
 
-  const teacherIds = (
-    await prisma.teacher.findMany({
+  const staffIds = (
+    await prisma.staff.findMany({
       where: { schoolId },
       select: { id: true },
     })
   ).map((t) => t.id);
 
-  const teacherClassrooms = (
-    await prisma.teacherClassroom.deleteMany({
-      where: { teacherId: { in: teacherIds } },
+  const staffClassrooms = (
+    await prisma.staffAssignment.deleteMany({
+      where: { staffId: { in: staffIds } },
     })
   ).count;
 
-  const teachers = (
-    await prisma.teacher.deleteMany({ where: { schoolId } })
+  const staff = (
+    await prisma.staff.deleteMany({ where: { schoolId } })
   ).count;
 
   const classrooms = (
-    await prisma.classroom.deleteMany({ where: { schoolId } })
+    await prisma.classroomSchool.deleteMany({ where: { schoolId } })
   ).count;
 
-  const yearIds = (
-    await prisma.academicYear.findMany({
-      where: { schoolId },
-      select: { id: true },
-    })
-  ).map((y) => y.id);
+  const schoolYearLinks = await prisma.academicYearSchool.findMany({
+    where: { schoolId },
+    select: { id: true },
+  });
+  const schoolYearIds = schoolYearLinks.map((link) => link.id);
 
   const calendarDays =
-    yearIds.length > 0
+    schoolYearIds.length > 0
       ? (
           await prisma.academicCalendarDay.deleteMany({
-            where: { academicYearId: { in: yearIds } },
+            where: { academicYearSchoolId: { in: schoolYearIds } },
           })
         ).count
       : 0;
 
+  // Year-scoped staff assignments already deleted above via staffIds; also clear
+  // any leftover assignments hanging off year links.
+  if (schoolYearIds.length > 0) {
+    await prisma.staffAssignment.deleteMany({
+      where: { academicYearSchoolId: { in: schoolYearIds } },
+    });
+  }
+
   const academicYears = (
-    await prisma.academicYear.deleteMany({ where: { schoolId } })
+    await prisma.academicYearSchool.deleteMany({ where: { schoolId } })
   ).count;
 
   const auditLogs = (
@@ -142,8 +149,8 @@ export async function purgeSchool(
 
   return {
     ...scoped,
-    teacherClassrooms,
-    teachers,
+    staffClassrooms,
+    staff,
     classrooms,
     calendarDays,
     academicYears,
@@ -157,11 +164,11 @@ export async function purgeSchool(
 export function formatPurgeCounts(counts: PurgeCounts): string {
   return [
     `  Schools:            ${counts.schools}`,
-    `  Academic years:     ${counts.academicYears}`,
+    `  Academic year links: ${counts.academicYears}`,
     `  Calendar days:      ${counts.calendarDays}`,
-    `  Classrooms:         ${counts.classrooms}`,
-    `  Teachers:           ${counts.teachers}`,
-    `  Teacher classrooms: ${counts.teacherClassrooms}`,
+    `  Classroom-school links: ${counts.classrooms}`,
+    `  Staff:              ${counts.staff}`,
+    `  Staff assignments:  ${counts.staffClassrooms}`,
     `  Enrollments:        ${counts.enrollments}`,
     `  Students removed:   ${counts.students}`,
     `  Attendance:         ${counts.attendance}`,
@@ -179,8 +186,8 @@ export function sumPurgeCounts(counts: PurgeCounts[]): PurgeCounts {
       assessments: total.assessments + current.assessments,
       finalGrades: total.finalGrades + current.finalGrades,
       enrollments: total.enrollments + current.enrollments,
-      teacherClassrooms: total.teacherClassrooms + current.teacherClassrooms,
-      teachers: total.teachers + current.teachers,
+      staffClassrooms: total.staffClassrooms + current.staffClassrooms,
+      staff: total.staff + current.staff,
       classrooms: total.classrooms + current.classrooms,
       calendarDays: total.calendarDays + current.calendarDays,
       academicYears: total.academicYears + current.academicYears,
@@ -194,8 +201,8 @@ export function sumPurgeCounts(counts: PurgeCounts[]): PurgeCounts {
       assessments: 0,
       finalGrades: 0,
       enrollments: 0,
-      teacherClassrooms: 0,
-      teachers: 0,
+      staffClassrooms: 0,
+      staff: 0,
       classrooms: 0,
       calendarDays: 0,
       academicYears: 0,

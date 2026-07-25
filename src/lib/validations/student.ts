@@ -2,16 +2,34 @@ import { z } from "zod";
 import { GENDER_CODES } from "@/lib/setup-types";
 import { emptyToUndefined, optionalBooleanQuery } from "@/lib/validations/pagination";
 
+const optionalEmail = z
+  .string()
+  .email("Invalid email")
+  .optional()
+  .or(z.literal(""));
+
+const optionalTrimmed = z.string().optional();
+
 export const studentSchema = z.object({
   firstName: z.string().min(1, "First name is required"),
   lastName: z.string().min(1, "Last name is required"),
   gender: z.enum(GENDER_CODES),
   dateOfBirth: z.string().optional(),
-  parentName: z.string().optional(),
-  parentPhone: z.string().optional(),
-  parentEmail: z.string().email("Invalid email").optional().or(z.literal("")),
-  address: z.string().optional(),
-  emergencyContact: z.string().optional(),
+  emailAddress: optionalEmail,
+  streetAddress: optionalTrimmed,
+  city: optionalTrimmed,
+  stateProvince: optionalTrimmed,
+  zipPostalCode: optionalTrimmed,
+  country: optionalTrimmed,
+  fatherGuardianFirstName: optionalTrimmed,
+  fatherGuardianLastName: optionalTrimmed,
+  fatherParentalResponsibility: z.boolean().optional(),
+  fatherMobileWhatsappNumber: optionalTrimmed,
+  motherGuardianFirstName: optionalTrimmed,
+  motherGuardianLastName: optionalTrimmed,
+  motherParentalResponsibility: z.boolean().optional(),
+  motherMobileWhatsappNumber: optionalTrimmed,
+  emergencyContact: optionalTrimmed,
   enrollmentDate: z.string().optional(),
   isActive: z.boolean().default(true),
 });

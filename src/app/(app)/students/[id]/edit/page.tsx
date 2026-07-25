@@ -99,10 +99,24 @@ export default function EditStudentPage({ params }: PageProps) {
                 lastName: student.lastName,
                 gender: asGender(student.gender),
                 dateOfBirth: student.dateOfBirth?.toISOString(),
-                parentName: student.parentName ?? undefined,
-                parentPhone: student.parentPhone ?? undefined,
-                parentEmail: student.parentEmail ?? undefined,
-                address: student.address ?? undefined,
+                emailAddress: student.emailAddress ?? undefined,
+                streetAddress: student.streetAddress ?? undefined,
+                city: student.city ?? undefined,
+                stateProvince: student.stateProvince ?? undefined,
+                zipPostalCode: student.zipPostalCode ?? undefined,
+                country: student.country ?? undefined,
+                fatherGuardianFirstName: student.fatherGuardianFirstName ?? undefined,
+                fatherGuardianLastName: student.fatherGuardianLastName ?? undefined,
+                fatherParentalResponsibility:
+                  student.fatherParentalResponsibility ?? undefined,
+                fatherMobileWhatsappNumber:
+                  student.fatherMobileWhatsappNumber ?? undefined,
+                motherGuardianFirstName: student.motherGuardianFirstName ?? undefined,
+                motherGuardianLastName: student.motherGuardianLastName ?? undefined,
+                motherParentalResponsibility:
+                  student.motherParentalResponsibility ?? undefined,
+                motherMobileWhatsappNumber:
+                  student.motherMobileWhatsappNumber ?? undefined,
                 emergencyContact: student.emergencyContact ?? undefined,
                 enrollmentDate: student.enrollmentDate.toISOString(),
                 isActive: student.isActive,

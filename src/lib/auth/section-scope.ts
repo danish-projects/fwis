@@ -1,25 +1,41 @@
 import { Prisma } from "@prisma/client";
 import type { GenderCode } from "@/lib/setup-types";
-import { sectionNameForGender } from "@/lib/teachers/gender-section";
+import { sectionNameForGender } from "@/lib/staff/gender-section";
 import type { AuthUser } from "@/lib/auth/session";
 
 const NO_ACCESS_ID = "00000000-0000-0000-0000-000000000000";
 
+const SCHOOL_ADMIN_ROLES = ["SCHOOL_ADMIN", "PRINCIPAL"] as const;
+const CLASSROOM_ROLES = ["TEACHER", "SUBSTITUTE"] as const;
+
+function isGlobalAdmin(user: AuthUser): boolean {
+  return user.roles.includes("NIGRA");
+}
+
+function hasSchoolAdminRole(user: AuthUser): boolean {
+  return user.roles.some((r) =>
+    (SCHOOL_ADMIN_ROLES as readonly string[]).includes(r)
+  );
+}
+
 export function isSectionScopedAdmin(user: AuthUser): boolean {
   return Boolean(
-    user.roles.includes("SCHOOL_ADMIN") && user.gender && user.classroomIds.length > 0
+    hasSchoolAdminRole(user) && user.gender && user.classroomIds.length > 0
   );
 }
 
 export function isClassroomScopedUser(user: AuthUser): boolean {
-  if (user.roles.includes("TEACHER") && user.classroomIds.length > 0) {
+  if (
+    user.roles.some((r) => (CLASSROOM_ROLES as readonly string[]).includes(r)) &&
+    user.classroomIds.length > 0
+  ) {
     return true;
   }
   return isSectionScopedAdmin(user);
 }
 
 export function assertClassroomInScope(user: AuthUser, classroomId: string): void {
-  if (user.roles.includes("SUPER_ADMIN")) return;
+  if (isGlobalAdmin(user)) return;
   if (isClassroomScopedUser(user) && !user.classroomIds.includes(classroomId)) {
     throw new Error("Unauthorized access to this grade");
   }
@@ -27,43 +43,100 @@ export function assertClassroomInScope(user: AuthUser, classroomId: string): voi
 
 export function buildClassroomListWhere(
   user: AuthUser,
-  extra: Prisma.ClassroomWhereInput = {}
+  extra: Prisma.ClassroomWhereInput & {
+    /** @deprecated Prefer schoolLinks; converted for callers still passing schoolId. */
+    schoolId?: string | { in: string[] };
+  } = {}
 ): Prisma.ClassroomWhereInput {
+  const { schoolId: schoolIdFilter, schoolLinks: extraSchoolLinks, ...restExtra } =
+    extra;
+
+  function schoolLinksForIds(ids: string[]): Prisma.ClassroomWhereInput {
+    return {
+      schoolLinks: {
+        some: {
+          schoolId: ids.length === 1 ? ids[0] : { in: ids },
+          deletedAt: null,
+        },
+      },
+    };
+  }
+
+  let requestedSchoolIds: string[] | null = null;
+  if (typeof schoolIdFilter === "string") {
+    requestedSchoolIds = [schoolIdFilter];
+  } else if (
+    schoolIdFilter &&
+    typeof schoolIdFilter === "object" &&
+    Array.isArray(schoolIdFilter.in)
+  ) {
+    requestedSchoolIds = schoolIdFilter.in;
+  }
+
   const base: Prisma.ClassroomWhereInput = {
     deletedAt: null,
     isActive: true,
-    ...extra,
+    ...restExtra,
   };
 
-  if (user.roles.includes("SUPER_ADMIN")) return base;
+  if (isGlobalAdmin(user)) {
+    if (requestedSchoolIds) {
+      return { ...base, ...schoolLinksForIds(requestedSchoolIds) };
+    }
+    if (extraSchoolLinks) {
+      return { ...base, schoolLinks: extraSchoolLinks };
+    }
+    return base;
+  }
+
   if (isClassroomScopedUser(user)) {
-    return { ...base, id: { in: user.classroomIds } };
+    const scoped: Prisma.ClassroomWhereInput = {
+      ...base,
+      id: { in: user.classroomIds },
+    };
+    if (requestedSchoolIds) {
+      return { ...scoped, ...schoolLinksForIds(requestedSchoolIds) };
+    }
+    if (extraSchoolLinks) {
+      return { ...scoped, schoolLinks: extraSchoolLinks };
+    }
+    return scoped;
   }
+
   if (user.schoolIds.length > 0) {
-    return { ...base, schoolId: { in: user.schoolIds } };
+    const allowed = requestedSchoolIds
+      ? requestedSchoolIds.filter((id) => user.schoolIds.includes(id))
+      : user.schoolIds;
+    return {
+      ...base,
+      ...schoolLinksForIds(
+        allowed.length > 0 ? allowed : ["00000000-0000-0000-0000-000000000000"]
+      ),
+    };
   }
+
   return { ...base, id: NO_ACCESS_ID };
 }
 
 export function scopedClassroomIdFilter(
   user: AuthUser
 ): { id: { in: string[] } } | Record<string, never> {
-  if (user.roles.includes("SUPER_ADMIN")) return {};
+  if (isGlobalAdmin(user)) return {};
   if (isClassroomScopedUser(user)) {
     return { id: { in: user.classroomIds } };
   }
   return {};
 }
 
-export function buildTeacherScopeWhere(
+export function buildStaffScopeWhere(
   user: AuthUser,
-  extra: Prisma.TeacherWhereInput = {}
-): Prisma.TeacherWhereInput {
-  if (user.roles.includes("SUPER_ADMIN")) {
+  extra: Prisma.StaffWhereInput = {}
+): Prisma.StaffWhereInput {
+  if (isGlobalAdmin(user)) {
     return { deletedAt: null, ...extra };
   }
 
-  const base: Prisma.TeacherWhereInput = {
+  const base: Prisma.StaffWhereInput = {
     deletedAt: null,
     schoolId: { in: user.schoolIds },
     ...extra,
@@ -81,7 +154,7 @@ export function mergeEnrollmentScope(
   user: AuthUser,
   base: Prisma.StudentEnrollmentWhereInput
 ): Prisma.StudentEnrollmentWhereInput {
-  if (user.roles.includes("SUPER_ADMIN")) return base;
+  if (isGlobalAdmin(user)) return base;
 
   if (isClassroomScopedUser(user)) {
     return {
@@ -113,7 +186,10 @@ export function mergeEnrollmentScope(
 }
 
 export function studentGenderFilter(user: AuthUser): Prisma.StudentWhereInput {
-  if (isSectionScopedAdmin(user) && user.gender) {
+  if (
+    user.gender &&
+    (isSectionScopedAdmin(user) || user.isSubstituteTeacher)
+  ) {
     return { gender: user.gender };
   }
   return {};
@@ -127,7 +203,9 @@ export async function resolveSectionScopedClassroomIds(
   const sectionName = sectionNameForGender(gender);
   const classrooms = await prisma.classroom.findMany({
     where: {
-      schoolId: { in: schoolIds },
+      schoolLinks: {
+        some: { schoolId: { in: schoolIds }, deletedAt: null, isActive: true },
+      },
       deletedAt: null,
       isActive: true,
       section: { name: sectionName },

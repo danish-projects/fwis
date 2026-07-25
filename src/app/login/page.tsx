@@ -14,7 +14,7 @@ function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const redirect = getSafeRedirectPath(searchParams.get("redirect"));
-  const [email, setEmail] = useState("");
+  const [userId, setUserId] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -26,7 +26,7 @@ function LoginForm() {
       const response = await fetch("/api/auth/sign-in", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({ userId, password }),
       });
 
       const contentType = response.headers.get("content-type") ?? "";
@@ -67,15 +67,15 @@ function LoginForm() {
       <CardContent>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2">
-            <Label htmlFor="email">Email</Label>
+            <Label htmlFor="userId">User ID</Label>
             <Input
-              id="email"
-              type="email"
-              placeholder="admin@school.org"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
+              id="userId"
+              type="text"
+              placeholder="majlis"
+              value={userId}
+              onChange={(e) => setUserId(e.target.value)}
               required
-              autoComplete="email"
+              autoComplete="username"
             />
           </div>
           <div className="space-y-2">

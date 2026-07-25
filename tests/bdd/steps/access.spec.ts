@@ -1,10 +1,9 @@
 import { describe, it, expect } from "vitest";
-import type { UserRoleCode } from "@prisma/client";
 import {
   getLandingPath,
   getNavForUser,
+  collectNavHrefs,
   hasPermission,
-  type Permission,
 } from "@/lib/auth/permissions";
 import { mergeEnrollmentScope } from "@/lib/auth/section-scope";
 import { IDS, mockUser } from "../mocks/fixtures";
@@ -12,7 +11,7 @@ import { IDS, mockUser } from "../mocks/fixtures";
 /** @feature tests/bdd/features/access.feature */
 describe("Feature: Role-based access", () => {
   it("Scenario: Super admin has all permissions", () => {
-    expect(hasPermission(["SUPER_ADMIN"], "schools:delete")).toBe(true);
+    expect(hasPermission(["NIGRA"], "schools:delete")).toBe(true);
   });
 
   it("Scenario: Teacher cannot delete schools", () => {
@@ -32,13 +31,13 @@ describe("Feature: Role-based access", () => {
   });
 
   it("Scenario: Super admin navigation includes schools and users", () => {
-    const hrefs = getNavForUser(["SUPER_ADMIN"]).map((item) => item.href);
+    const hrefs = collectNavHrefs(getNavForUser(["NIGRA"]));
     expect(hrefs).toContain("/schools");
     expect(hrefs).toContain("/users");
   });
 
   it("Scenario: Teacher navigation includes attendance and assessments", () => {
-    const hrefs = getNavForUser(["TEACHER"]).map((item) => item.href);
+    const hrefs = collectNavHrefs(getNavForUser(["TEACHER"]));
     expect(hrefs).toContain("/teacher/attendance");
     expect(hrefs).toContain("/teacher/assessments");
   });

@@ -1,9 +1,14 @@
 import type { PrismaClient, UserRoleCode } from "@prisma/client";
 import type { GenderCode } from "@/lib/setup-types";
+import { toLoginUserId } from "@/lib/auth/login-user-id";
+import {
+  resolveRoleDefaultPassword,
+  ROLE_DEFAULT_PASSWORDS,
+} from "@/lib/school/default-login-specs";
 
 export type DemoAuthUser = {
   id: string;
-  email: string;
+  userId: string;
   password: string;
   fullName: string;
   roles: UserRoleCode[];
@@ -14,74 +19,88 @@ export type DemoAuthUser = {
 
 export const SUPER_ADMIN_ID = "00000000-0000-4000-8000-000000000001";
 
-const SCHOOL_SLUGS = [
-  { city: "Houston", slug: "houston" },
-  { city: "Chicago", slug: "chicago" },
-  { city: "New York", slug: "newyork" },
-  { city: "Dallas", slug: "dallas" },
-  { city: "Atlanta", slug: "atlanta" },
-] as const;
-
-function demoUserId(counter: number) {
-  return `00000000-0000-4000-8000-${String(counter).padStart(12, "0")}`;
-}
-
-function buildSectionAdminUsers(): DemoAuthUser[] {
-  const users: DemoAuthUser[] = [];
-  let counter = 4;
-
-  for (const school of SCHOOL_SLUGS) {
-    users.push({
-      id: demoUserId(counter++),
-      email: `admin.m.${school.slug}@fwis.org`,
-      password: "FwisAdmin786!",
-      fullName: `${school.city} Boys Admin`,
-      roles: ["SCHOOL_ADMIN"],
-      schoolCity: school.city,
-      gender: "MALE",
-    });
-    users.push({
-      id: demoUserId(counter++),
-      email: `admin.f.${school.slug}@fwis.org`,
-      password: "FwisAdmin786!",
-      fullName: `${school.city} Girls Admin`,
-      roles: ["SCHOOL_ADMIN"],
-      schoolCity: school.city,
-      gender: "FEMALE",
-    });
-  }
-
-  return users;
-}
-
-/** Demo login accounts — IDs must match Supabase Auth user UUIDs. */
-export const DEMO_AUTH_USERS: DemoAuthUser[] = [
+/** Demo login accounts for local development scripts (Houston HOU code). */
+const DEMO_AUTH_USERS_RAW: DemoAuthUser[] = [
   {
     id: SUPER_ADMIN_ID,
-    email: "superadmin@fwis.org",
-    password: "FwisAdmin786!",
-    fullName: "FWIS Super Admin",
-    roles: ["SUPER_ADMIN"],
+    userId: "majlis",
+    password: resolveRoleDefaultPassword("NIGRA"),
+    fullName: "FWIS Nigran",
+    roles: ["NIGRA"],
   },
   {
     id: "00000000-0000-4000-8000-000000000002",
-    email: "admin.houston@fwis.org",
-    password: "FwisAdmin786!",
-    fullName: "Br. Ahmed Khan",
-    roles: ["SCHOOL_ADMIN"],
+    userId: "hou.principal",
+    password: ROLE_DEFAULT_PASSWORDS.PRINCIPAL,
+    fullName: "Houston Principal",
+    roles: ["PRINCIPAL"],
     schoolCity: "Houston",
   },
   {
     id: "00000000-0000-4000-8000-000000000003",
-    email: "grade1.boys.houston@fwis.org",
-    password: "FwisTeacher786!",
-    fullName: "Muhammad Usman Khan",
+    userId: "hou.m.admin",
+    password: ROLE_DEFAULT_PASSWORDS.SCHOOL_ADMIN,
+    fullName: "Houston Boys Admin",
+    roles: ["SCHOOL_ADMIN"],
+    schoolCity: "Houston",
+    gender: "MALE",
+  },
+  {
+    id: "00000000-0000-4000-8000-000000000004",
+    userId: "hou.f.admin",
+    password: ROLE_DEFAULT_PASSWORDS.SCHOOL_ADMIN,
+    fullName: "Houston Girls Admin",
+    roles: ["SCHOOL_ADMIN"],
+    schoolCity: "Houston",
+    gender: "FEMALE",
+  },
+  {
+    id: "00000000-0000-4000-8000-000000000005",
+    userId: "hou.b.g1",
+    password: ROLE_DEFAULT_PASSWORDS.TEACHER,
+    fullName: "Houston Grade 1 Boys Teacher",
     roles: ["TEACHER"],
     schoolCity: "Houston",
-    linkTeacherEmail: "grade1.boys.houston@fwis.org",
+    gender: "MALE",
+    linkTeacherEmail: "hou.b.g1",
   },
-  ...buildSectionAdminUsers(),
+  {
+    id: "00000000-0000-4000-8000-000000000006",
+    userId: "hou.g.g1",
+    password: ROLE_DEFAULT_PASSWORDS.TEACHER,
+    fullName: "Houston Grade 1 Girls Teacher",
+    roles: ["TEACHER"],
+    schoolCity: "Houston",
+    gender: "FEMALE",
+    linkTeacherEmail: "hou.g.g1",
+  },
+  {
+    id: "00000000-0000-4000-8000-000000000007",
+    userId: "hou.m.sub",
+    password: ROLE_DEFAULT_PASSWORDS.SUBSTITUTE,
+    fullName: "Houston Boys Substitute",
+    roles: ["SUBSTITUTE"],
+    schoolCity: "Houston",
+    gender: "MALE",
+  },
+  {
+    id: "00000000-0000-4000-8000-000000000008",
+    userId: "hou.f.sub",
+    password: ROLE_DEFAULT_PASSWORDS.SUBSTITUTE,
+    fullName: "Houston Girls Substitute",
+    roles: ["SUBSTITUTE"],
+    schoolCity: "Houston",
+    gender: "FEMALE",
+  },
 ];
+
+export const DEMO_AUTH_USERS: DemoAuthUser[] = DEMO_AUTH_USERS_RAW.map((demo) => ({
+  ...demo,
+  userId: toLoginUserId(demo.userId),
+  linkTeacherEmail: demo.linkTeacherEmail
+    ? toLoginUserId(demo.linkTeacherEmail)
+    : undefined,
+}));
 
 export async function seedDemoAppUsers(
   prisma: PrismaClient,
@@ -92,14 +111,14 @@ export async function seedDemoAppUsers(
     await prisma.appUser.upsert({
       where: { id: demo.id },
       update: {
-        email: demo.email,
+        userId: demo.userId,
         fullName: demo.fullName,
         gender: demo.gender ?? null,
         isActive: true,
       },
       create: {
         id: demo.id,
-        email: demo.email,
+        userId: demo.userId,
         fullName: demo.fullName,
         gender: demo.gender ?? null,
         isActive: true,
@@ -133,13 +152,13 @@ export async function seedDemoAppUsers(
     if (demo.linkTeacherEmail && demo.schoolCity) {
       const school = schools.find((s) => s.city === demo.schoolCity);
       if (school) {
-        await prisma.teacher.updateMany({
+        await prisma.staff.updateMany({
           where: {
             schoolId: school.id,
             email: demo.linkTeacherEmail,
             deletedAt: null,
           },
-          data: { userId: demo.id },
+          data: { userId: demo.userId },
         });
       }
     }

@@ -24,7 +24,6 @@ import {
   decryptStudentPii,
   decryptStudentPiiList,
   encryptStudentPiiForDb,
-  plainStudentPiiFromDb,
 } from "@/lib/students/student-pii";
 
 async function buildEnrollmentYearFilter(user: AuthUser) {
@@ -71,10 +70,20 @@ function parseStudentData(data: StudentInput) {
     lastName: parsed.lastName.trim(),
     gender: parsed.gender,
     dateOfBirth: parsed.dateOfBirth ? new Date(parsed.dateOfBirth) : null,
-    parentName: parsed.parentName?.trim() || null,
-    parentPhone: parsed.parentPhone?.trim() || null,
-    parentEmail: parsed.parentEmail?.trim() || null,
-    address: parsed.address?.trim() || null,
+    emailAddress: parsed.emailAddress?.trim() || null,
+    streetAddress: parsed.streetAddress?.trim() || null,
+    city: parsed.city?.trim() || null,
+    stateProvince: parsed.stateProvince?.trim() || null,
+    zipPostalCode: parsed.zipPostalCode?.trim() || null,
+    country: parsed.country?.trim() || null,
+    fatherGuardianFirstName: parsed.fatherGuardianFirstName?.trim() || null,
+    fatherGuardianLastName: parsed.fatherGuardianLastName?.trim() || null,
+    fatherParentalResponsibility: parsed.fatherParentalResponsibility ?? null,
+    fatherMobileWhatsappNumber: parsed.fatherMobileWhatsappNumber?.trim() || null,
+    motherGuardianFirstName: parsed.motherGuardianFirstName?.trim() || null,
+    motherGuardianLastName: parsed.motherGuardianLastName?.trim() || null,
+    motherParentalResponsibility: parsed.motherParentalResponsibility ?? null,
+    motherMobileWhatsappNumber: parsed.motherMobileWhatsappNumber?.trim() || null,
     emergencyContact: parsed.emergencyContact?.trim() || null,
     enrollmentDate: parsed.enrollmentDate
       ? new Date(parsed.enrollmentDate)
@@ -89,11 +98,19 @@ function buildStudentDbPayload(
 ) {
   const pii = encryptStudentPiiForDb({
     dateOfBirth: data.dateOfBirth,
-    parentName: data.parentName,
-    parentPhone: data.parentPhone,
-    parentEmail: data.parentEmail,
-    address: data.address,
+    emailAddress: data.emailAddress,
     emergencyContact: data.emergencyContact,
+    streetAddress: data.streetAddress,
+    city: data.city,
+    stateProvince: data.stateProvince,
+    zipPostalCode: data.zipPostalCode,
+    country: data.country,
+    fatherGuardianFirstName: data.fatherGuardianFirstName,
+    fatherGuardianLastName: data.fatherGuardianLastName,
+    fatherMobileWhatsappNumber: data.fatherMobileWhatsappNumber,
+    motherGuardianFirstName: data.motherGuardianFirstName,
+    motherGuardianLastName: data.motherGuardianLastName,
+    motherMobileWhatsappNumber: data.motherMobileWhatsappNumber,
   });
 
   return {
@@ -102,6 +119,8 @@ function buildStudentDbPayload(
     gender: data.gender,
     enrollmentDate: data.enrollmentDate,
     isActive: data.isActive,
+    fatherParentalResponsibility: data.fatherParentalResponsibility,
+    motherParentalResponsibility: data.motherParentalResponsibility,
     ...pii,
     ...extra,
   };
@@ -110,11 +129,19 @@ function buildStudentDbPayload(
 async function findDuplicateStudent(data: ReturnType<typeof parseStudentData>) {
   const pii = encryptStudentPiiForDb({
     dateOfBirth: data.dateOfBirth,
-    parentName: data.parentName,
-    parentPhone: data.parentPhone,
-    parentEmail: data.parentEmail,
-    address: data.address,
+    emailAddress: data.emailAddress,
     emergencyContact: data.emergencyContact,
+    streetAddress: data.streetAddress,
+    city: data.city,
+    stateProvince: data.stateProvince,
+    zipPostalCode: data.zipPostalCode,
+    country: data.country,
+    fatherGuardianFirstName: data.fatherGuardianFirstName,
+    fatherGuardianLastName: data.fatherGuardianLastName,
+    fatherMobileWhatsappNumber: data.fatherMobileWhatsappNumber,
+    motherGuardianFirstName: data.motherGuardianFirstName,
+    motherGuardianLastName: data.motherGuardianLastName,
+    motherMobileWhatsappNumber: data.motherMobileWhatsappNumber,
   });
 
   const conditions: Prisma.StudentWhereInput[] = [
@@ -126,10 +153,22 @@ async function findDuplicateStudent(data: ReturnType<typeof parseStudentData>) {
     },
   ];
 
-  if (pii.parentPhoneHash) {
+  if (pii.fatherMobileWhatsappHash) {
     conditions.push({
       deletedAt: null,
-      parentPhoneHash: pii.parentPhoneHash,
+      OR: [
+        { fatherMobileWhatsappHash: pii.fatherMobileWhatsappHash },
+        { motherMobileWhatsappHash: pii.fatherMobileWhatsappHash },
+      ],
+    });
+  }
+  if (pii.motherMobileWhatsappHash) {
+    conditions.push({
+      deletedAt: null,
+      OR: [
+        { motherMobileWhatsappHash: pii.motherMobileWhatsappHash },
+        { fatherMobileWhatsappHash: pii.motherMobileWhatsappHash },
+      ],
     });
   }
 
@@ -152,11 +191,11 @@ export async function createStudent(data: StudentInput) {
   const duplicate = await findDuplicateStudent(studentData);
   if (duplicate) {
     throw new Error(
-      "A student with matching name, date of birth, or parent phone already exists. Use the existing record."
+      "A student with matching name, date of birth, or guardian phone already exists. Use the existing record."
     );
   }
 
-  const originSchoolId = user.roles.includes("SUPER_ADMIN")
+  const originSchoolId = user.roles.includes("NIGRA")
     ? null
     : user.schoolIds[0] ?? null;
 
@@ -188,7 +227,7 @@ export async function updateStudent(id: string, data: StudentInput) {
   const duplicate = await findDuplicateStudent(studentData);
   if (duplicate && duplicate.id !== id) {
     throw new Error(
-      "Another student with matching name, date of birth, or parent phone already exists."
+      "Another student with matching name, date of birth, or guardian phone already exists."
     );
   }
 
@@ -325,7 +364,7 @@ export async function getStudentById(id: string) {
           school: true,
           classroom: { include: { grade: true, section: true } },
           academicYearSchool: { include: { academicYear: true } },
-          teacher: { select: { firstName: true, lastName: true } },
+          staff: { select: { firstName: true, lastName: true } },
         },
       },
     },
@@ -380,9 +419,18 @@ export async function exportStudentsCsv(rawParams: {
     lastName: s.lastName,
     gender: s.gender,
     dateOfBirth: s.dateOfBirth?.toISOString().split("T")[0] ?? "",
-    parentName: s.parentName ?? "",
-    parentPhone: s.parentPhone ?? "",
-    parentEmail: s.parentEmail ?? "",
+    emailAddress: s.emailAddress ?? "",
+    streetAddress: s.streetAddress ?? "",
+    city: s.city ?? "",
+    stateProvince: s.stateProvince ?? "",
+    zipPostalCode: s.zipPostalCode ?? "",
+    country: s.country ?? "",
+    fatherGuardianFirstName: s.fatherGuardianFirstName ?? "",
+    fatherGuardianLastName: s.fatherGuardianLastName ?? "",
+    fatherMobileWhatsappNumber: s.fatherMobileWhatsappNumber ?? "",
+    motherGuardianFirstName: s.motherGuardianFirstName ?? "",
+    motherGuardianLastName: s.motherGuardianLastName ?? "",
+    motherMobileWhatsappNumber: s.motherMobileWhatsappNumber ?? "",
     school: s.enrollments[0]?.school.name ?? "",
     classroom: s.enrollments[0]?.classroom.name ?? "",
     isActive: s.isActive ? "Yes" : "No",
