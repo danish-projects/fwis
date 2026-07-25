@@ -4,7 +4,7 @@ import { applySecurityHeaders } from "@/lib/security/security-headers";
 import { getPublicOrigin, isInternalHost } from "@/lib/security/request-origin";
 
 /**
- * Redirect HTTP to HTTPS when behind a reverse proxy (Vercel, nginx, etc.).
+ * Redirect HTTP to HTTPS when behind a reverse proxy (IIS, nginx, etc.).
  * Skips HTTP-only hosts (e.g. SmarterASP dtempurl.com) and IIS internal localhost ports.
  */
 export function ensureHttpsRedirect(request: NextRequest): NextResponse | null {

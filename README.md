@@ -210,7 +210,6 @@ Letter grades: **A** ≥90, **B** ≥80, **C** ≥70, **D** &lt;70 (no F). Pass/
 | Document | Contents |
 | -------- | -------- |
 | [docs/SMARTERASP_SETUP.md](docs/SMARTERASP_SETUP.md) | Database, env, deploy |
-| [docs/HOSTING_COMPARISON.md](docs/HOSTING_COMPARISON.md) | SmarterASP vs Vercel cost comparison |
 | [docs/DATA_IMPORT.md](docs/DATA_IMPORT.md) | Excel import workflow |
 | [docs/LEADERSHIP_DEMO.md](docs/LEADERSHIP_DEMO.md) | Leadership deck & demo accounts |
 | [docs/pii-security.md](docs/pii-security.md) | Student PII encryption |
