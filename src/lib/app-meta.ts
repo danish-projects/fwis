@@ -28,18 +28,11 @@ export function getAppEnvLabel(): string {
   if (raw === "prod" || raw === "production") return "prod";
   if (raw === "local" || raw === "development" || raw === "dev") return "local";
 
-  // Legacy hosting files used NODE_ENV=stage
-  if (process.env.NODE_ENV === "stage" || process.env.NODE_ENV === "staging") {
-    return "stage";
-  }
-  if (
-    process.env.NODE_ENV === "development" ||
-    process.env.NODE_ENV === "local"
-  ) {
-    return "local";
-  }
-  // Production builds without an explicit env → treat as prod
-  if (process.env.NODE_ENV === "production") return "prod";
+  // Prefer explicit APP_ENV; NODE_ENV is typed as development|production|test only.
+  const nodeEnv = String(process.env.NODE_ENV ?? "").toLowerCase();
+  if (nodeEnv === "stage" || nodeEnv === "staging") return "stage";
+  if (nodeEnv === "development" || nodeEnv === "local") return "local";
+  if (nodeEnv === "production") return "prod";
 
   return raw || "local";
 }

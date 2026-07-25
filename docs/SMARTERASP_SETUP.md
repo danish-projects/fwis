@@ -2,8 +2,6 @@
 
 FWIS uses **PostgreSQL on SmarterASP.NET** for all application data and **built-in app authentication** (passwords stored hashed in `app_users`).
 
-For a **cost and platform comparison** (SmarterASP vs Vercel + Neon), see [HOSTING_COMPARISON.md](./HOSTING_COMPARISON.md).
-
 ## 1. Create PostgreSQL database
 
 In the SmarterASP control panel:

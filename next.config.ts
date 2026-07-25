@@ -41,16 +41,11 @@ function resolveAppEnv(): string {
   if (raw === "stage" || raw === "staging") return "stage";
   if (raw === "prod" || raw === "production") return "prod";
   if (raw === "local" || raw === "development" || raw === "dev") return "local";
-  // Legacy hosting files used NODE_ENV=stage
-  if (process.env.NODE_ENV === "stage" || process.env.NODE_ENV === "staging") {
-    return "stage";
-  }
-  if (
-    process.env.NODE_ENV === "development" ||
-    process.env.NODE_ENV === "local"
-  ) {
-    return "local";
-  }
+
+  // Prefer explicit APP_ENV; NODE_ENV is typed as development|production|test only.
+  const nodeEnv = String(process.env.NODE_ENV ?? "").toLowerCase();
+  if (nodeEnv === "stage" || nodeEnv === "staging") return "stage";
+  if (nodeEnv === "development" || nodeEnv === "local") return "local";
   return "prod";
 }
 
