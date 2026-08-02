@@ -5,6 +5,7 @@ import { ATTENDANCE_MARKABLE_SESSION_TYPES } from "@/lib/grades/attendance-perce
 import { formatLessonPlanLabel } from "@/lib/calendar/lesson-plan";
 import { SESSION_TYPE_LABELS } from "@/lib/calendar/generate-sundays";
 import { selectDefaultCalendarDayId } from "@/lib/calendar/select-default-day";
+import { calendarDateKey } from "@/lib/calendar/calendar-date";
 import { formatDate } from "@/lib/utils";
 import type { AcademicYearSummary } from "@/lib/academic-year/constants";
 import { resolveAcademicYearForSchool } from "@/lib/academic-year/resolve-year";
@@ -175,9 +176,13 @@ export async function getDashboardAttendanceWidgetData(
     string,
     { sessionKey: string; sortOrder: number; date: Date; label: string }
   >();
+  /** Maps each school's calendar day id → shared session key (date). */
+  const dayIdToSessionKey = new Map<string, string>();
+
   for (const ctx of schoolContexts) {
     for (const day of ctx.calendarDays) {
-      const sessionKey = day.id;
+      const sessionKey = calendarDateKey(day.date);
+      dayIdToSessionKey.set(day.id, sessionKey);
       if (!sessionMap.has(sessionKey)) {
         sessionMap.set(sessionKey, {
           sessionKey,
@@ -198,7 +203,7 @@ export async function getDashboardAttendanceWidgetData(
   if (referenceDays.length > 0) {
     const defaultId = selectDefaultCalendarDayId(referenceDays);
     if (defaultId) {
-      defaultSessionKey = defaultId;
+      defaultSessionKey = dayIdToSessionKey.get(defaultId) ?? defaultSessionKey;
     }
   }
 
@@ -267,7 +272,10 @@ export async function getDashboardAttendanceWidgetData(
       for (const record of enrollment.attendance) {
         if (!markableDayIds.has(record.calendarDayId)) continue;
 
-        const sessionKeysForRecord = [ALL_SESSIONS_KEY, record.calendarDayId];
+        const dateSessionKey = dayIdToSessionKey.get(record.calendarDayId);
+        if (!dateSessionKey) continue;
+
+        const sessionKeysForRecord = [ALL_SESSIONS_KEY, dateSessionKey];
 
         for (const sessionKey of sessionKeysForRecord) {
           for (const sectionKey of targetSectionKeys) {
@@ -315,10 +323,8 @@ export async function getSchoolSundayAttendanceStats(schoolIds?: string[]) {
         ? null
         : {
             id: sessionKey,
-            date: new Date(),
-            lessonPlanNumber: Number.isFinite(Number(sessionKey))
-              ? Number(sessionKey)
-              : null,
+            date: sessionKey !== ALL_SESSIONS_KEY ? new Date(`${sessionKey}T00:00:00.000Z`) : new Date(),
+            lessonPlanNumber: null,
             sessionType: "INSTRUCTIONAL" as const,
           },
       present,

@@ -77,6 +77,7 @@ type AppSidebarProps = {
   schools: SchoolSummary[];
   selectedSchoolId: string | null;
   onSignOut: () => void;
+  onSchoolPendingChange?: (pending: boolean) => void;
 };
 
 function childIsActive(
@@ -192,6 +193,7 @@ export function AppSidebar({
   schools,
   selectedSchoolId,
   onSignOut,
+  onSchoolPendingChange,
 }: AppSidebarProps) {
   const pathname = usePathname();
   const { setTheme } = useTheme();
@@ -225,6 +227,7 @@ export function AppSidebar({
           <SchoolSwitcher
             schools={schools}
             selectedSchoolId={selectedSchoolId}
+            onPendingChange={onSchoolPendingChange}
           />
         </div>
       )}

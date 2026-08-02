@@ -114,6 +114,19 @@ export async function bulkUpsertAttendance(
 
     const previous = previousMap.get(record.enrollmentId);
 
+    // Attendance page sends the selected rating → write it on create + update.
+    // Consolidate omits behavior → keep existing on update; default on insert.
+    const behaviorValue =
+      typeof record.behaviorValue === "string" ? record.behaviorValue : undefined;
+    const behaviorComments =
+      typeof record.behaviorComments === "string"
+        ? record.behaviorComments
+        : undefined;
+    const teacherComments =
+      typeof record.teacherComments === "string"
+        ? record.teacherComments
+        : undefined;
+
     await prisma.attendance.upsert({
       where: {
         enrollmentId_calendarDayId: {
@@ -125,16 +138,16 @@ export async function bulkUpsertAttendance(
         enrollmentId: record.enrollmentId,
         calendarDayId: validatedDayId,
         status: record.status,
-        behaviorValue: record.behaviorValue,
-        behaviorComments: record.behaviorComments,
-        teacherComments: record.teacherComments,
+        behaviorValue: behaviorValue ?? "MEETS_EXPECTATIONS",
+        ...(behaviorComments !== undefined ? { behaviorComments } : {}),
+        ...(teacherComments !== undefined ? { teacherComments } : {}),
         recordedById: user.id,
       },
       update: {
         status: record.status,
-        behaviorValue: record.behaviorValue,
-        behaviorComments: record.behaviorComments,
-        teacherComments: record.teacherComments,
+        ...(behaviorValue !== undefined ? { behaviorValue } : {}),
+        ...(behaviorComments !== undefined ? { behaviorComments } : {}),
+        ...(teacherComments !== undefined ? { teacherComments } : {}),
         recordedById: user.id,
       },
     });
@@ -398,9 +411,9 @@ async function attachEnrollmentCounts<
   }
 
   const counts = await prisma.studentEnrollment.groupBy({
-    by: ["classroomId"],
+    by: ["classroomId", "academicYearSchoolId"],
     where: {
-      classroomId: { in: classrooms.map((c) => c.id) },
+      classroomId: { in: [...new Set(classrooms.map((c) => c.id))] },
       academicYearSchoolId: { in: yearIds },
       deletedAt: null,
       status: "ACTIVE",
@@ -408,12 +421,20 @@ async function attachEnrollmentCounts<
     _count: { _all: true },
   });
 
-  const countMap = new Map(counts.map((c) => [c.classroomId, c._count._all]));
+  const countMap = new Map(
+    counts.map((c) => [`${c.classroomId}:${c.academicYearSchoolId}`, c._count._all])
+  );
 
-  return classrooms.map((c) => ({
-    ...c,
-    _count: { enrollments: countMap.get(c.id) ?? 0 },
-  }));
+  return classrooms.map((c) => {
+    const yearSchoolId = yearBySchool.get(c.schoolId);
+    const enrollments = yearSchoolId
+      ? (countMap.get(`${c.id}:${yearSchoolId}`) ?? 0)
+      : 0;
+    return {
+      ...c,
+      _count: { enrollments },
+    };
+  });
 }
 
 export async function getClassroomsForAttendance() {
@@ -783,13 +804,20 @@ export async function bulkUpsertAttendanceMatrix(records: MatrixAttendanceRecord
   let saved = 0;
 
   for (const [calendarDayId, dayRecords] of byDay) {
+    // Omit behavior when not provided so consolidate updates preserve an
+    // existing rating; create path defaults to MEETS_EXPECTATIONS.
     const result = await bulkUpsertAttendance(
       calendarDayId,
-      dayRecords.map((r) => ({
-        enrollmentId: r.enrollmentId,
-        status: r.status,
-        behaviorValue: r.behaviorValue,
-      }))
+      dayRecords.map((r) => {
+        const payload: AttendanceRecord = {
+          enrollmentId: r.enrollmentId,
+          status: r.status,
+        };
+        if (typeof r.behaviorValue === "string") {
+          payload.behaviorValue = r.behaviorValue;
+        }
+        return payload;
+      })
     );
     emailsSent += result.emailsSent;
     saved += dayRecords.length;

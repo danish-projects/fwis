@@ -102,3 +102,18 @@ There is no built-in search/alerts/metrics dashboard on SmarterASP. For CloudWat
 | Lesson Plans: “Google Drive not configured” | Host is missing `GOOGLE_DRIVE_FWIS_DOCS_FOLDER_ID` and/or service account credentials — set them in the panel (see §7) and restart |
 | No `logs/node-stdout.log` | Create/upload `logs/` folder, confirm `stdoutLogEnabled="true"` in `web.config`, restart Node, hit the site, then refresh FTP or **Server Logs** |
 | Need CloudWatch-style monitoring | Not offered by SmarterASP — use FTP/`logs/` or in-app **Server Logs**, or a third-party APM |
+
+## 9. Consolidate SQL view
+
+After `prisma migrate deploy`, query consolidated roster × calendar day data:
+
+```sql
+SELECT *
+FROM v_consolidate_attendance_day
+WHERE school_code = 'HOU'
+  AND academic_year_name = '2026-2027'
+  AND grade_name = 'Grade 1'
+ORDER BY calendar_date, student_last_name, student_first_name;
+```
+
+Columns include school, academic year, staff, grade/section/classroom, calendar date, session type, student, attendance code, behavior code, and assessment scores (`assessment_quiz_1` … `assessment_final_exam`) when present.

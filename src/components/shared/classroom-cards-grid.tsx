@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 type ClassroomCard = {
   id: string;
   name: string;
+  schoolId?: string;
   _count: { enrollments: number };
 };
 
@@ -26,7 +27,13 @@ export function ClassroomCardsGrid({
   return (
     <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
       {classrooms.map((classroom) => (
-        <Card key={classroom.id}>
+        <Card
+          key={
+            classroom.schoolId
+              ? `${classroom.schoolId}:${classroom.id}`
+              : classroom.id
+          }
+        >
           <CardHeader>
             <CardTitle className="text-lg">{classroom.name}</CardTitle>
           </CardHeader>

@@ -189,6 +189,11 @@ export function AttendanceGradeMatrix({
       const day = calendarDays.find((d) => d.id === calendarDayId);
       if (!day || !isMarkableSessionType(day.sessionType)) continue;
 
+      if (!value.behaviorValue) {
+        toast.error("Select a behavior rating for every attendance mark you save");
+        return;
+      }
+
       records.push({
         enrollmentId,
         calendarDayId,

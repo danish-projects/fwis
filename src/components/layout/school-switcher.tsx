@@ -1,8 +1,8 @@
 "use client";
 
-import { useTransition } from "react";
+import { useEffect, useTransition } from "react";
 import { usePathname, useRouter } from "next/navigation";
-import { School } from "lucide-react";
+import { Loader2, School } from "lucide-react";
 import { setSelectedSchool } from "@/actions/school-selection";
 import type { SchoolSummary } from "@/lib/school/constants";
 import { formatSchoolCityLabel } from "@/lib/school/format-school-code";
@@ -12,6 +12,7 @@ type SchoolSwitcherProps = {
   schools: SchoolSummary[];
   selectedSchoolId: string | null;
   className?: string;
+  onPendingChange?: (pending: boolean) => void;
 };
 
 /** Classroom detail routes that should return to their list when school changes. */
@@ -28,10 +29,15 @@ export function SchoolSwitcher({
   schools,
   selectedSchoolId,
   className,
+  onPendingChange,
 }: SchoolSwitcherProps) {
   const router = useRouter();
   const pathname = usePathname();
   const [pending, startTransition] = useTransition();
+
+  useEffect(() => {
+    onPendingChange?.(pending);
+  }, [pending, onPendingChange]);
 
   if (schools.length === 0) return null;
 
@@ -72,19 +78,31 @@ export function SchoolSwitcher({
       <label className="mb-1.5 flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
         <School className="h-3.5 w-3.5" />
         School
+        {pending && (
+          <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" aria-hidden />
+        )}
       </label>
-      <select
-        value={selectedSchoolId ?? schools[0]?.id ?? ""}
-        onChange={handleChange}
-        disabled={pending}
-        className="h-9 w-full rounded-md border border-input bg-background px-2.5 text-sm disabled:opacity-60"
-      >
-        {schools.map((school) => (
-          <option key={school.id} value={school.id}>
-            {formatSchoolCityLabel(school)}
-          </option>
-        ))}
-      </select>
+      <div className="relative">
+        <select
+          value={selectedSchoolId ?? schools[0]?.id ?? ""}
+          onChange={handleChange}
+          disabled={pending}
+          aria-busy={pending}
+          className="h-9 w-full rounded-md border border-input bg-background px-2.5 pr-8 text-sm disabled:opacity-60"
+        >
+          {schools.map((school) => (
+            <option key={school.id} value={school.id}>
+              {formatSchoolCityLabel(school)}
+            </option>
+          ))}
+        </select>
+        {pending && (
+          <Loader2
+            className="pointer-events-none absolute right-2 top-1/2 h-4 w-4 -translate-y-1/2 animate-spin text-primary"
+            aria-hidden
+          />
+        )}
+      </div>
     </div>
   );
 }

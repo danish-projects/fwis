@@ -242,6 +242,14 @@ export function AttendanceEntry({
       return;
     }
 
+    const missingBehavior = records.filter((r) => !r.behaviorValue);
+    if (missingBehavior.length > 0) {
+      toast.error(
+        `Select a behavior rating for all students (${missingBehavior.length} missing)`
+      );
+      return;
+    }
+
     startSaveTransition(async () => {
       try {
         const result = await bulkUpsertAttendance(
@@ -249,7 +257,7 @@ export function AttendanceEntry({
           records.map((r) => ({
             enrollmentId: r.enrollmentId,
             status: r.status!,
-            behaviorValue: r.behaviorValue,
+            behaviorValue: r.behaviorValue!,
             behaviorComments: r.behaviorComments,
           }))
         );

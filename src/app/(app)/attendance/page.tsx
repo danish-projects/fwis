@@ -40,6 +40,7 @@ export default async function AttendancePage() {
         classrooms={visibleClassrooms.map((c) => ({
           id: c.id,
           name: c.name,
+          schoolId: c.schoolId,
           _count: c._count,
         }))}
         hrefPrefix="/attendance"
