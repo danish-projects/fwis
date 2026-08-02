@@ -11,7 +11,7 @@ type PageProps = {
 };
 
 export default async function TeacherAssessmentsPage({ searchParams }: PageProps) {
-  await requireRole("TEACHER");
+  await requireRole("TEACHER", "SUBSTITUTE");
   const params = await searchParams;
 
   const data = await getCourseMaterialAssessmentsPageData({

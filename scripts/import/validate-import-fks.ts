@@ -91,7 +91,11 @@ export async function validateImportForeignKeys(
         select: { code: true, label: true },
       }),
       prisma.role.findMany({
-        where: { code: { in: ["TEACHER", "SUBSTITUTE"] } },
+        where: {
+          code: {
+            in: ["PRINCIPAL", "SCHOOL_ADMIN", "TEACHER", "SUBSTITUTE"],
+          },
+        },
         select: { id: true, code: true },
       }),
     ]);
@@ -101,15 +105,25 @@ export async function validateImportForeignKeys(
   const genderByCode = new Map(genders.map((g) => [g.code, g]));
   const roleByCode = new Map(roles.map((r) => [r.code, r]));
 
-  if (!roleByCode.has("TEACHER") || !roleByCode.has("SUBSTITUTE")) {
+  if (
+    !roleByCode.has("PRINCIPAL") ||
+    !roleByCode.has("SCHOOL_ADMIN") ||
+    !roleByCode.has("TEACHER") ||
+    !roleByCode.has("SUBSTITUTE")
+  ) {
     throw new Error(
-      "FK roles: TEACHER and/or SUBSTITUTE missing. Run npm run db:seed."
+      "FK roles: PRINCIPAL, SCHOOL_ADMIN, TEACHER, and/or SUBSTITUTE missing. Run npm run db:seed."
     );
   }
   pushOk(
     checks,
     "roles",
-    `TEACHER (${roleByCode.get("TEACHER")!.id}), SUBSTITUTE (${roleByCode.get("SUBSTITUTE")!.id})`
+    [
+      `PRINCIPAL (${roleByCode.get("PRINCIPAL")!.id})`,
+      `SCHOOL_ADMIN (${roleByCode.get("SCHOOL_ADMIN")!.id})`,
+      `TEACHER (${roleByCode.get("TEACHER")!.id})`,
+      `SUBSTITUTE (${roleByCode.get("SUBSTITUTE")!.id})`,
+    ].join(", ")
   );
 
   if (!genderByCode.has("MALE") || !genderByCode.has("FEMALE")) {
@@ -163,7 +177,11 @@ export async function validateImportForeignKeys(
   for (const [index, row] of input.staff.entries()) {
     const rowNum = index + 2;
     const role = normalizeStaffRole(row.staff_role);
-    if (role === "SUBSTITUTE") {
+    if (
+      role === "SUBSTITUTE" ||
+      role === "PRINCIPAL" ||
+      role === "SCHOOL_ADMIN"
+    ) {
       const gender = normalizeGender(row.gender);
       if (!genderByCode.has(gender)) {
         throw new Error(

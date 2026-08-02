@@ -20,6 +20,7 @@ import {
 import { selectDefaultCalendarDayId } from "@/lib/calendar/select-default-day";
 import { sendAbsentNotification } from "@/lib/email/send-absent-notification";
 import { decryptStudentPii } from "@/lib/students/student-pii";
+import { ENROLLMENT_BY_STUDENT_NAME_ORDER_BY } from "@/lib/students/sort-students";
 import { getSelectedAcademicYear, resolveAcademicYearForSchool, resolveAcademicYearIdsForSchools } from "@/lib/academic-year/resolve-year";
 import { pickSchoolLink } from "@/lib/classrooms/ensure-classroom-for-school";
 import { getSelectedSchool } from "@/lib/school/resolve-school";
@@ -179,10 +180,12 @@ export async function bulkUpsertAttendance(
 
   await createAuditLog({
     userId: user.id,
+    schoolId,
     entity: "Attendance",
     action: "UPDATE",
     newValues: {
       calendarDayId: validatedDayId,
+      classroomId: enrollments[0]?.classroomId,
       count: validatedRecords.length,
       emailsSent,
     },
@@ -281,7 +284,7 @@ export async function getAttendanceSession(
         select: { firstName: true, lastName: true, gender: true, studentNumber: true },
       },
     },
-    orderBy: { student: { lastName: "asc" } },
+    orderBy: ENROLLMENT_BY_STUDENT_NAME_ORDER_BY,
   });
 
   const attendanceByEnrollment = new Map<
@@ -662,12 +665,12 @@ export async function getGradeAttendanceMatrix(
     classroomId != null || gradeId != null
       ? [
           { classroom: { name: "asc" as const } },
-          { student: { lastName: "asc" as const } },
+          ...ENROLLMENT_BY_STUDENT_NAME_ORDER_BY,
         ]
       : [
           { classroom: { grade: { sortOrder: "asc" as const } } },
           { classroom: { name: "asc" as const } },
-          { student: { lastName: "asc" as const } },
+          ...ENROLLMENT_BY_STUDENT_NAME_ORDER_BY,
         ];
 
   const [calendarDays, enrollments] = await Promise.all([

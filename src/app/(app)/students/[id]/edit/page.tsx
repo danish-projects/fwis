@@ -14,8 +14,17 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { StudentInput } from "@/lib/validations/student";
 import { asGender } from "@/lib/setup-types";
+import { toastStudentSaveError } from "@/lib/students/toast-student-save-error";
 
 type PageProps = { params: Promise<{ id: string }> };
+
+function toDateInputValue(value: Date | string | null | undefined): string {
+  if (!value) return "";
+  if (value instanceof Date) {
+    return Number.isNaN(value.getTime()) ? "" : value.toISOString().slice(0, 10);
+  }
+  return String(value).slice(0, 10);
+}
 
 export default function EditStudentPage({ params }: PageProps) {
   const router = useRouter();
@@ -44,7 +53,7 @@ export default function EditStudentPage({ params }: PageProps) {
       toast.success("Student updated");
       router.push(`/students/${id}`);
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Update failed");
+      toastStudentSaveError(error, "Could not update student");
       setSaving(false);
     }
   }
@@ -56,7 +65,7 @@ export default function EditStudentPage({ params }: PageProps) {
       toast.success("Student deleted");
       router.push("/students");
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Delete failed");
+      toastStudentSaveError(error, "Could not delete student");
     }
   }
 
@@ -98,7 +107,7 @@ export default function EditStudentPage({ params }: PageProps) {
                 firstName: student.firstName,
                 lastName: student.lastName,
                 gender: asGender(student.gender),
-                dateOfBirth: student.dateOfBirth?.toISOString(),
+                dateOfBirth: toDateInputValue(student.dateOfBirth) || undefined,
                 emailAddress: student.emailAddress ?? undefined,
                 streetAddress: student.streetAddress ?? undefined,
                 city: student.city ?? undefined,
@@ -118,7 +127,7 @@ export default function EditStudentPage({ params }: PageProps) {
                 motherMobileWhatsappNumber:
                   student.motherMobileWhatsappNumber ?? undefined,
                 emergencyContact: student.emergencyContact ?? undefined,
-                enrollmentDate: student.enrollmentDate.toISOString(),
+                enrollmentDate: toDateInputValue(student.enrollmentDate) || undefined,
                 isActive: student.isActive,
               }}
               submitLabel={saving ? "Saving..." : "Save Changes"}

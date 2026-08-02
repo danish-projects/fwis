@@ -6,7 +6,7 @@ import { Card, CardContent } from "@/components/ui/card";
 export const metadata = { title: "Teacher Attendance" };
 
 export default async function TeacherAttendancePage() {
-  await requireRole("TEACHER");
+  await requireRole("TEACHER", "SUBSTITUTE");
   const user = await getSessionUser();
   const classroomId = user ? await getTeacherPrimaryClassroomId(user) : null;
 

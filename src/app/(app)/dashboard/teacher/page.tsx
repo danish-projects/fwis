@@ -18,7 +18,7 @@ import { getSelectedSchool } from "@/lib/school/resolve-school";
 export const metadata = { title: "Teacher Dashboard" };
 
 export default async function TeacherDashboardPage() {
-  const user = await requireRole("TEACHER");
+  const user = await requireRole("TEACHER", "SUBSTITUTE");
   const classroomId = await getTeacherPrimaryClassroomId(user);
 
   if (!classroomId) {

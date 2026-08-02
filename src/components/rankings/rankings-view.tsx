@@ -10,6 +10,7 @@ import {
 } from "@/lib/rankings/rank-categories";
 import { formatPercent } from "@/lib/utils";
 import { RankingsExportPdf } from "@/components/rankings/rankings-export-pdf";
+import { compareStudentNames } from "@/lib/students/sort-students";
 
 const ALL_FILTER = "all";
 
@@ -23,6 +24,8 @@ type RankGridRow = {
   category: Exclude<RankCategory, "all">;
   categoryLabel: string;
   studentName: string;
+  firstName: string;
+  lastName: string;
   studentNumber: string | null;
   gradeName: string;
   sectionName: string;
@@ -44,6 +47,8 @@ function buildGridRows(data: SchoolRankingsData): RankGridRow[] {
         category: "achievement",
         categoryLabel: RANK_CATEGORY_LABELS.achievement,
         studentName: student.studentName,
+        firstName: student.firstName,
+        lastName: student.lastName,
         studentNumber: student.studentNumber,
         gradeName: student.gradeName,
         sectionName: student.sectionName,
@@ -65,6 +70,8 @@ function buildGridRows(data: SchoolRankingsData): RankGridRow[] {
       category: "attendance",
       categoryLabel: RANK_CATEGORY_LABELS.attendance,
       studentName: student.studentName,
+      firstName: student.firstName,
+      lastName: student.lastName,
       studentNumber: student.studentNumber,
       gradeName: student.gradeName,
       sectionName: student.sectionName,
@@ -84,6 +91,8 @@ function buildGridRows(data: SchoolRankingsData): RankGridRow[] {
         category: "completion",
         categoryLabel: RANK_CATEGORY_LABELS.completion,
         studentName: student.studentName,
+        firstName: student.firstName,
+        lastName: student.lastName,
         studentNumber: student.studentNumber,
         gradeName: student.gradeName,
         sectionName: student.sectionName,
@@ -111,7 +120,7 @@ function buildGridRows(data: SchoolRankingsData): RankGridRow[] {
     const gradeDiff = a.gradeWithSection.localeCompare(b.gradeWithSection);
     if (gradeDiff !== 0) return gradeDiff;
     if (a.rank !== b.rank) return a.rank - b.rank;
-    return a.studentName.localeCompare(b.studentName);
+    return compareStudentNames(a, b);
   });
 }
 

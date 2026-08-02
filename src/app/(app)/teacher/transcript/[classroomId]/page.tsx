@@ -21,7 +21,7 @@ export default async function TeacherTranscriptClassPage({
   params,
   searchParams,
 }: PageProps) {
-  const user = await requireRole("TEACHER");
+  const user = await requireRole("TEACHER", "SUBSTITUTE");
   const { classroomId } = await params;
   const { year } = await searchParams;
 

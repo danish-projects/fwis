@@ -24,7 +24,7 @@ export default async function TeacherAssessmentsClassPage({
   params,
   searchParams,
 }: PageProps) {
-  const user = await requireRole("TEACHER");
+  const user = await requireRole("TEACHER", "SUBSTITUTE");
   const { classroomId } = await params;
   const { year, column } = await searchParams;
   const initialColumnFilter = parseAssessmentColumnFilter(column);

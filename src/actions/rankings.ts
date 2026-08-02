@@ -29,10 +29,13 @@ import type {
   RankCertificateData,
   RankCertificateRequest,
 } from "@/lib/rankings/certificate-types";
+import { compareByScoreThenStudentName } from "@/lib/students/sort-students";
 
 export type RankStudentRow = {
   enrollmentId: string;
   studentName: string;
+  firstName: string;
+  lastName: string;
   studentNumber: string | null;
   gradeName: string;
   gradeSortOrder: number;
@@ -77,9 +80,7 @@ function compareByScoreThenName(
   b: ScoredStudent,
   scoreKey: "finalPct" | "attendancePct"
 ) {
-  const scoreDiff = b[scoreKey] - a[scoreKey];
-  if (scoreDiff !== 0) return scoreDiff;
-  return a.studentName.localeCompare(b.studentName);
+  return compareByScoreThenStudentName(a, b, scoreKey);
 }
 
 function withRanks(students: ScoredStudent[]): RankStudentRow[] {
@@ -213,6 +214,8 @@ export async function getSchoolRankings(): Promise<SchoolRankingsData | null> {
     return {
       enrollmentId: enrollment.id,
       studentName: `${enrollment.student.firstName} ${enrollment.student.lastName}`,
+      firstName: enrollment.student.firstName,
+      lastName: enrollment.student.lastName,
       studentNumber: enrollment.student.studentNumber,
       gradeName: enrollment.classroom.grade.name,
       gradeSortOrder: enrollment.classroom.grade.sortOrder,

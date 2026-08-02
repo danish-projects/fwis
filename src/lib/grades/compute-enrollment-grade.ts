@@ -13,6 +13,7 @@ import {
 } from "@/lib/grades/calculate-final-grade";
 import type { GradingScaleConfig } from "@/lib/grades/grading-scale-types";
 import { loadGradingScale } from "@/lib/grades/get-grading-scale";
+import { compareStudentNames } from "@/lib/students/sort-students";
 
 export function computeEnrollmentGradeMetrics(
   input: {
@@ -170,14 +171,24 @@ export async function recomputeClassroomRanks(
         status: "ACTIVE",
       },
     },
-    select: { enrollmentId: true, finalPct: true },
+    select: {
+      enrollmentId: true,
+      finalPct: true,
+      enrollment: {
+        select: {
+          student: { select: { firstName: true, lastName: true } },
+        },
+      },
+    },
   });
 
   if (grades.length === 0) return;
 
-  const ranked = [...grades].sort(
-    (a, b) => Number(b.finalPct) - Number(a.finalPct)
-  );
+  const ranked = [...grades].sort((a, b) => {
+    const scoreDiff = Number(b.finalPct) - Number(a.finalPct);
+    if (scoreDiff !== 0) return scoreDiff;
+    return compareStudentNames(a.enrollment.student, b.enrollment.student);
+  });
 
   await prisma.$transaction(
     ranked.map((grade, index) =>

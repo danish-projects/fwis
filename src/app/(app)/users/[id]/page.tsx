@@ -69,32 +69,36 @@ export default async function UserDetailPage({ params }: PageProps) {
         </CardContent>
       </Card>
 
-      {user.staff && (
+      {user.staff.length > 0 && (
         <Card>
           <CardHeader>
             <CardTitle>Linked Staff</CardTitle>
           </CardHeader>
-          <CardContent>
-            <p className="font-medium">
-              {user.staff.firstName} {user.staff.lastName}
-            </p>
-            <p className="text-sm text-muted-foreground">
-              {user.staff.school.name}
-              {user.staff.assignments.length > 0 &&
-                ` · ${user.staff.assignments
-                  .map((a) => {
-                    const year = a.academicYearSchool.academicYear.name;
-                    const grade = a.classroom?.name;
-                    const role = a.role.name;
-                    return grade
-                      ? `${year}: ${role} · ${grade}`
-                      : `${year}: ${role}`;
-                  })
-                  .join("; ")}`}
-            </p>
-            <Button asChild variant="link" className="mt-2 h-auto p-0">
-              <Link href={`/staff/${user.staff.id}`}>View staff profile</Link>
-            </Button>
+          <CardContent className="space-y-4">
+            {user.staff.map((staff) => (
+              <div key={staff.id} className="space-y-1">
+                <p className="font-medium">
+                  {staff.firstName} {staff.lastName}
+                </p>
+                <p className="text-sm text-muted-foreground">
+                  {staff.school.name}
+                  {staff.assignments.length > 0 &&
+                    ` · ${staff.assignments
+                      .map((a) => {
+                        const year = a.academicYearSchool.academicYear.name;
+                        const grade = a.classroom?.name;
+                        const role = a.role.name;
+                        return grade
+                          ? `${year}: ${role} · ${grade}`
+                          : `${year}: ${role}`;
+                      })
+                      .join("; ")}`}
+                </p>
+                <Button asChild variant="link" className="mt-1 h-auto p-0">
+                  <Link href={`/staff/${staff.id}`}>View staff profile</Link>
+                </Button>
+              </div>
+            ))}
           </CardContent>
         </Card>
       )}

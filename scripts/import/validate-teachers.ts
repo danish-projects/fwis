@@ -10,34 +10,86 @@ import {
 } from "./normalize";
 import type { RowRecord } from "./read-workbook";
 
-const IMPORT_ALLOWED_ROLES = new Set(["TEACHER", "SUBSTITUTE"]);
+export type ImportStaffRoleCode =
+  | "PRINCIPAL"
+  | "SCHOOL_ADMIN"
+  | "TEACHER"
+  | "SUBSTITUTE";
 
-function normalizeImportStaffRole(value: string | undefined, rowNum: number) {
+const IMPORT_ALLOWED_ROLES = new Set<ImportStaffRoleCode>([
+  "PRINCIPAL",
+  "SCHOOL_ADMIN",
+  "TEACHER",
+  "SUBSTITUTE",
+]);
+
+/** Roles that are not assigned to a single classroom. */
+const NON_CLASSROOM_ROLES = new Set<ImportStaffRoleCode>([
+  "PRINCIPAL",
+  "SCHOOL_ADMIN",
+  "SUBSTITUTE",
+]);
+
+function normalizeImportStaffRole(
+  value: string | undefined,
+  rowNum: number
+): ImportStaffRoleCode {
   const role = normalizeStaffRole(value);
-  if (!IMPORT_ALLOWED_ROLES.has(role)) {
+  if (!IMPORT_ALLOWED_ROLES.has(role as ImportStaffRoleCode)) {
     throw new Error(
-      `Staff row ${rowNum}: staff_role "${value}" is not allowed. Use Teacher or Substitute.`
+      `Staff row ${rowNum}: staff_role "${value}" is not allowed. ` +
+        `Use Principal, School Admin, Teacher, or Substitute.`
     );
   }
-  return role;
+  return role as ImportStaffRoleCode;
 }
 
-function resolveStaffGender(row: RowRecord, rowNum: number, roleCode: string) {
+function resolveStaffGender(
+  row: RowRecord,
+  rowNum: number,
+  roleCode: ImportStaffRoleCode
+): "MALE" | "FEMALE" {
   const rawGender = row.gender?.trim();
   if (rawGender) {
     return normalizeGender(rawGender);
   }
 
-  if (roleCode === "SUBSTITUTE") {
+  if (roleCode === "TEACHER") {
+    // Teachers: derive from section when gender column is blank.
+    const sectionName = normalizeSection(row.section);
+    return sectionName === "Boys" ? "MALE" : "FEMALE";
+  }
+
+  if (roleCode === "PRINCIPAL") {
     throw new Error(
-      `Staff row ${rowNum}: gender is required for Substitute (MALE or FEMALE). ` +
-        `Substitutes are section-scoped like admins, not assigned to a classroom.`
+      `Staff row ${rowNum}: gender is required for Principal (MALE or FEMALE).`
     );
   }
 
-  // Teachers: derive from section when gender column is blank.
-  const sectionName = normalizeSection(row.section);
-  return sectionName === "Boys" ? ("MALE" as const) : ("FEMALE" as const);
+  if (roleCode === "SCHOOL_ADMIN") {
+    throw new Error(
+      `Staff row ${rowNum}: gender is required for School Admin (MALE or FEMALE). ` +
+        `Boys admin → MALE (…m.admin), Girls admin → FEMALE (…f.admin).`
+    );
+  }
+
+  throw new Error(
+    `Staff row ${rowNum}: gender is required for Substitute (MALE or FEMALE). ` +
+      `Substitutes are section-scoped like admins, not assigned to a classroom.`
+  );
+}
+
+function assertNoClassroom(
+  row: RowRecord,
+  rowNum: number,
+  roleLabel: string
+): void {
+  if (row.grade?.trim() || row.section?.trim()) {
+    throw new Error(
+      `Staff row ${rowNum}: ${roleLabel} must not have grade/section. ` +
+        `Leave those blank.`
+    );
+  }
 }
 
 /** Resolve the app login for a Staff import row from school code + role scope. */
@@ -45,19 +97,41 @@ export function resolveImportStaffLoginUserId(
   cityCode: string,
   row: RowRecord,
   rowNum: number
-): { loginUserId: string; roleCode: "TEACHER" | "SUBSTITUTE"; gender: "MALE" | "FEMALE" } {
-  const roleCode = normalizeImportStaffRole(row.staff_role, rowNum) as
-    | "TEACHER"
-    | "SUBSTITUTE";
+): {
+  loginUserId: string;
+  roleCode: ImportStaffRoleCode;
+  gender: "MALE" | "FEMALE";
+} {
+  const roleCode = normalizeImportStaffRole(row.staff_role, rowNum);
   const gender = resolveStaffGender(row, rowNum, roleCode);
 
+  if (roleCode === "PRINCIPAL") {
+    assertNoClassroom(row, rowNum, "Principal");
+    return {
+      loginUserId: deriveStaffLoginUserId({
+        cityCode,
+        roleCode: "PRINCIPAL",
+      }),
+      roleCode,
+      gender,
+    };
+  }
+
+  if (roleCode === "SCHOOL_ADMIN") {
+    assertNoClassroom(row, rowNum, "School Admin");
+    return {
+      loginUserId: deriveStaffLoginUserId({
+        cityCode,
+        roleCode: "SCHOOL_ADMIN",
+        gender,
+      }),
+      roleCode,
+      gender,
+    };
+  }
+
   if (roleCode === "SUBSTITUTE") {
-    if (row.grade?.trim() || row.section?.trim()) {
-      throw new Error(
-        `Staff row ${rowNum}: Substitute must not have grade/section. ` +
-          `Leave those blank; use gender (MALE/FEMALE) for Boys/Girls section scope.`
-      );
-    }
+    assertNoClassroom(row, rowNum, "Substitute");
     return {
       loginUserId: deriveStaffLoginUserId({
         cityCode,
@@ -89,8 +163,23 @@ export function resolveImportStaffLoginUserId(
   };
 }
 
+function loginDerivationHint(roleCode: ImportStaffRoleCode): string {
+  switch (roleCode) {
+    case "PRINCIPAL":
+      return "school code → {code}.principal";
+    case "SCHOOL_ADMIN":
+      return "school code + gender → {code}.m.admin / {code}.f.admin";
+    case "SUBSTITUTE":
+      return "school code + gender";
+    case "TEACHER":
+      return "school code + grade/section";
+  }
+}
+
 export type StaffValidationSummary = {
   staff: number;
+  principals: number;
+  admins: number;
   teachers: number;
   substitutes: number;
   rolesChecked: number;
@@ -99,9 +188,10 @@ export type StaffValidationSummary = {
 
 /**
  * Validate Staff sheet:
+ * - Principal: no classroom; gender required; login {code}.principal
+ * - School Admin: no classroom; gender required; login {code}.m/f.admin
  * - Teacher: grade + section required; one teacher per grade + section
  * - Substitute: no classroom; gender required (Boys/Girls section scope)
- * - Login user_id is derived from school code + grade/section (or gender)
  * - Derived login exists in app_users, is active, and belongs to the school
  */
 export async function validateImportStaff(
@@ -111,12 +201,13 @@ export async function validateImportStaff(
   cityCode: string
 ): Promise<StaffValidationSummary> {
   const classroomOwners = new Map<string, string>();
-  const seenUserIds = new Set<string>();
+  let principals = 0;
+  let admins = 0;
   let teachers = 0;
   let substitutes = 0;
 
   const roleRows = await prisma.role.findMany({
-    where: { code: { in: ["TEACHER", "SUBSTITUTE"] } },
+    where: { code: { in: [...IMPORT_ALLOWED_ROLES] } },
     select: { id: true, code: true },
   });
   const roleByCode = new Map(roleRows.map((role) => [role.code, role]));
@@ -137,13 +228,6 @@ export async function validateImportStaff(
       rowNum
     );
 
-    if (seenUserIds.has(loginUserId)) {
-      throw new Error(
-        `Staff row ${rowNum}: duplicate derived login "${loginUserId}" on the Staff sheet.`
-      );
-    }
-    seenUserIds.add(loginUserId);
-
     const role = roleByCode.get(roleCode);
     if (!role) {
       throw new Error(
@@ -151,7 +235,11 @@ export async function validateImportStaff(
       );
     }
 
-    if (roleCode === "SUBSTITUTE") {
+    if (roleCode === "PRINCIPAL") {
+      principals++;
+    } else if (roleCode === "SCHOOL_ADMIN") {
+      admins++;
+    } else if (roleCode === "SUBSTITUTE") {
       substitutes++;
     } else {
       teachers++;
@@ -181,9 +269,7 @@ export async function validateImportStaff(
     if (!appUser) {
       throw new Error(
         `Staff row ${rowNum}: app user "${loginUserId}" does not exist ` +
-          `(derived from school code + ${
-            roleCode === "TEACHER" ? "grade/section" : "gender"
-          }). ` +
+          `(derived from ${loginDerivationHint(roleCode)}). ` +
           `Create default school users in the app before importing.`
       );
     }
@@ -213,6 +299,8 @@ export async function validateImportStaff(
 
   return {
     staff: staffRows.length,
+    principals,
+    admins,
     teachers,
     substitutes,
     rolesChecked: staffRows.length,
@@ -254,10 +342,20 @@ export function validateStudentTeacherCoverage(
 export function formatStaffValidation(summary: StaffValidationSummary): string {
   return [
     "Staff validation:",
-    `  Staff rows: ${summary.staff} (${summary.teachers} teachers, ${summary.substitutes} substitutes)`,
+    `  Staff rows: ${summary.staff} ` +
+      `(${summary.principals} principal, ${summary.admins} admin, ` +
+      `${summary.teachers} teachers, ${summary.substitutes} substitutes)`,
     `  Roles checked against roles table: ${summary.rolesChecked}`,
     `  Unique teacher classrooms (grade + section): ${summary.classrooms}`,
   ].join("\n");
+}
+
+export function isImportClassroomRole(roleCode: string): boolean {
+  return roleCode === "TEACHER";
+}
+
+export function isImportNonClassroomRole(roleCode: string): boolean {
+  return NON_CLASSROOM_ROLES.has(roleCode as ImportStaffRoleCode);
 }
 
 /** @deprecated Use validateImportStaff */

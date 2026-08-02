@@ -2,11 +2,10 @@ import { z } from "zod";
 import { GENDER_CODES } from "@/lib/setup-types";
 import { emptyToUndefined, optionalBooleanQuery } from "@/lib/validations/pagination";
 
-const optionalEmail = z
-  .string()
-  .email("Invalid email")
-  .optional()
-  .or(z.literal(""));
+const optionalEmail = z.union([
+  z.string().email("Enter a valid email (for example name@example.com)"),
+  z.literal(""),
+]).optional();
 
 const optionalTrimmed = z.string().optional();
 

@@ -301,8 +301,8 @@ model StudentNumberSequence {
 model Staff {
   id        String    @id @default(uuid()) @db.Uuid
   schoolId  String    @map("school_id") @db.Uuid
-  /** Login handle — FK to app_users.user_id (not app_users.id). */
-  userId    String?   @unique @map("user_id")
+  /** Login handle — FK to app_users.user_id (not app_users.id). Not unique: one login may link to multiple staff. */
+  userId    String?   @map("user_id")
   gender    String
   firstName String    @map("first_name")
   lastName  String    @map("last_name")
@@ -321,6 +321,7 @@ model Staff {
   enrollments StudentEnrollment[]
 
   @@unique([schoolId, email])
+  @@index([userId])
   @@map("staff")
 }
 
@@ -473,7 +474,7 @@ model AppUser {
 
   roles               UserRole[]
   schools             UserSchool[]
-  staff               Staff?
+  staff               Staff[]
   auditLogs           AuditLog[]
   attendance          Attendance[]
   assessments         AssessmentScore[]

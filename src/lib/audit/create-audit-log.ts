@@ -1,5 +1,7 @@
 import { AuditAction, Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { schoolNowForDbTimestamp } from "@/lib/calendar/calendar-date";
+import { appLog } from "@/lib/logging/app-logger";
 
 const PII_FIELDS = new Set([
   "emailAddress",
@@ -58,9 +60,15 @@ export async function createAuditLog(input: AuditInput) {
         newValues: sanitizeAuditValue(input.newValues),
         ipAddress: input.ipAddress ?? undefined,
         userAgent: input.userAgent ?? undefined,
+        // Host/DB may be Pacific; store Central wall clock in TIMESTAMP WITHOUT TIME ZONE.
+        createdAt: schoolNowForDbTimestamp(),
       },
     });
   } catch (error) {
-    console.error("Failed to create audit log:", error);
+    appLog.error("Failed to create audit log", {
+      error: error instanceof Error ? error.message : String(error),
+      entity: input.entity,
+      action: input.action,
+    });
   }
 }

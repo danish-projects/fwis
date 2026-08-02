@@ -17,7 +17,11 @@ export function getGoogleDriveServiceAccount(): GoogleDriveServiceAccount | null
           privateKey: parsed.private_key,
         };
       }
-    } catch {
+    } catch (error) {
+      console.error(
+        "[google-drive] GOOGLE_DRIVE_SERVICE_ACCOUNT_JSON is set but invalid JSON:",
+        error instanceof Error ? error.message : error
+      );
       return null;
     }
   }

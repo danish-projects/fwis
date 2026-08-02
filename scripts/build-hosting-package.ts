@@ -497,6 +497,8 @@ node server.js
       <environmentVariables>
         <environmentVariable name="PORT" value="%HTTP_PLATFORM_PORT%" />
         <environmentVariable name="NODE_ENV" value="production" />
+        <environmentVariable name="SCHOOL_TIMEZONE" value="America/Chicago" />
+        <environmentVariable name="TZ" value="America/Chicago" />
         <!-- Add production secrets here (or use a .env file — see web.config.env.example): -->
         <!-- <environmentVariable name="DATABASE_URL" value="..." /> -->
         <!-- <environmentVariable name="DIRECT_URL" value="..." /> -->
@@ -509,6 +511,15 @@ node server.js
 </configuration>
 `
   );
+
+  // httpPlatform will not create the logs directory; ship it so stdout logging works after upload.
+  // Placeholder file keeps the folder in zip archives (empty dirs are often omitted).
+  writeFile(
+    outputDir,
+    path.join("logs", ".gitkeep"),
+    "# IIS httpPlatform stdout → node-stdout.log (created at runtime)\n"
+  );
+  console.log("  Created logs/ (for web.config stdoutLogFile)");
 
   writeFile(
     outputDir,
@@ -525,6 +536,17 @@ AUTH_SESSION_SECRET=base64-32-byte-secret
 # Must be https:// for Secure cookies and HSTS-related app behavior
 NEXT_PUBLIC_APP_URL=https://fwis-stage.codewithraza.com
 PII_ENCRYPTION_KEY=base64-32-byte-key
+# School calendar “today” (Central Time). Required for correct attendance defaults on UTC hosts.
+SCHOOL_TIMEZONE=America/Chicago
+# Process timezone (audit timestamps / Node local APIs). Match SCHOOL_TIMEZONE — host may be Pacific.
+TZ=America/Chicago
+
+# Lesson plans / course materials (Google Drive) — required for Lesson Plans page
+GOOGLE_DRIVE_FWIS_DOCS_FOLDER_ID=your-fwis-docs-folder-id
+# Prefer split credentials on SmarterASP panel (multiline JSON often breaks):
+GOOGLE_DRIVE_SERVICE_ACCOUNT_EMAIL=fwis-docs@….iam.gserviceaccount.com
+GOOGLE_DRIVE_SERVICE_ACCOUNT_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\n…\n-----END PRIVATE KEY-----\n"
+# Or upload a .env next to server.js with GOOGLE_DRIVE_SERVICE_ACCOUNT_JSON=…
 
 # Optional email notifications
 # RESEND_API_KEY=re_...
@@ -622,8 +644,8 @@ The script runs **L1 BDD tests** (mock data + typecheck) before building, then e
 1. Upload \`hosting-build-${envName}.zip\` to your site root, then unzip in **Control Panel → File Manager**,  
    **or** upload the entire \`${outputFolderName}/\` folder contents via FTP (FileZilla).
 2. Ensure these files are in the **site root** (same folder as \`web.config\`):
-   \`server.js\`, \`web.config\`, \`.next/\`, \`node_modules/\`, \`public/\`
-3. Create a \`logs/\` folder (for \`web.config\` stdout logging) if it does not exist.
+   \`server.js\`, \`web.config\`, \`.next/\`, \`node_modules/\`, \`public/\`, \`logs/\`
+3. Restart the Node.js app after upload. Stdout logs write to \`logs/node-stdout.log\` (folder is included in this package).
 
 ### Enable Node.js on SmarterASP
 
@@ -672,6 +694,7 @@ KB: [Next.js on SmarterASP](https://www.smarterasp.net/support/kb/a2233/how-to-p
 |------|---------|
 | \`server.js\` | Next.js standalone server entry |
 | \`web.config\` | IIS / SmarterASP httpPlatformHandler config |
+| \`logs/\` | Directory for \`node-stdout.log\` (httpPlatform stdout) |
 | \`.next/\` | Compiled app + static assets |
 | \`public/\` | Public static files |
 | \`prisma/\` | Schema and migrations |

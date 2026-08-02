@@ -175,6 +175,11 @@ export function getPrimaryRole(roles: UserRoleCode[]): UserRoleCode {
   return "READ_ONLY";
 }
 
+/** Classroom-scoped staff: assigned teachers and section-scoped substitutes. */
+export function isTeacherOrSubstitute(roles: UserRoleCode[]): boolean {
+  return roles.includes("TEACHER") || roles.includes("SUBSTITUTE");
+}
+
 export function getLandingPath(role: UserRoleCode): string {
   switch (role) {
     case "NIGRA":
@@ -393,6 +398,18 @@ const ADMIN_NAV: NavItem[] = [
     icon: "Shield",
     permissions: ["users:read"],
     roles: ["NIGRA", "SCHOOL_ADMIN", "PRINCIPAL"],
+  },
+  {
+    title: "Audit Log",
+    href: "/audit-log",
+    icon: "ScrollText",
+    roles: ["NIGRA"],
+  },
+  {
+    title: "Server Logs",
+    href: "/server-logs",
+    icon: "FileText",
+    roles: ["NIGRA"],
   },
 ];
 

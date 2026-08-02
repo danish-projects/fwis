@@ -12,23 +12,39 @@ const PREFIX = "enc:v1:";
 
 let warnedDevKey = false;
 
+function assertAes256Key(buf: Buffer, source: string): Buffer {
+  if (buf.length !== 32) {
+    throw new Error(
+      `${source} must be 32 bytes for AES-256 (got ${buf.length}). Generate with: openssl rand -base64 32`
+    );
+  }
+  return buf;
+}
+
 function decodeKey(raw: string): Buffer {
   const trimmed = raw.trim();
   if (trimmed.startsWith("base64:")) {
-    return Buffer.from(trimmed.slice("base64:".length), "base64");
+    return assertAes256Key(
+      Buffer.from(trimmed.slice("base64:".length), "base64"),
+      "PII_ENCRYPTION_KEY"
+    );
   }
-  const buf = Buffer.from(trimmed, "base64");
-  if (buf.length !== 32) {
-    throw new Error("PII_ENCRYPTION_KEY must decode to 32 bytes (use: openssl rand -base64 32)");
-  }
-  return buf;
+  return assertAes256Key(Buffer.from(trimmed, "base64"), "PII_ENCRYPTION_KEY");
+}
+
+function isProductionRuntime(): boolean {
+  const nodeEnv = String(process.env.NODE_ENV ?? "");
+  const appEnv = String(process.env.NEXT_PUBLIC_APP_ENV ?? "").toLowerCase();
+  return (
+    nodeEnv === "production" || appEnv === "prod" || appEnv === "stage"
+  );
 }
 
 export function getPiiEncryptionKey(): Buffer {
   const raw = process.env.PII_ENCRYPTION_KEY;
   if (raw) return decodeKey(raw);
 
-  if (process.env.NODE_ENV === "production") {
+  if (isProductionRuntime()) {
     throw new Error(
       "PII_ENCRYPTION_KEY is required in production. Generate with: openssl rand -base64 32"
     );
@@ -40,7 +56,11 @@ export function getPiiEncryptionKey(): Buffer {
     );
     warnedDevKey = true;
   }
-  return Buffer.from("fwis-dev-only-pii-key-32bytes!!", "utf8");
+  // Exactly 32 UTF-8 bytes for AES-256-GCM (previous string was 31 and threw on encrypt).
+  return assertAes256Key(
+    Buffer.from("fwis-dev-only-pii-key-32-bytes!!", "utf8"),
+    "dev PII key"
+  );
 }
 
 function getLookupKey(): Buffer {

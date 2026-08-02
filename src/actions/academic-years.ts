@@ -17,6 +17,7 @@ import {
   type AcademicYearInput,
 } from "@/lib/validations/academic-year";
 import { generateCalendarDaysForYear } from "@/lib/calendar/bootstrap-calendar-days";
+import { parseCalendarDateInput } from "@/lib/calendar/calendar-date";
 import { getSelectedSchool } from "@/lib/school/resolve-school";
 
 function parseCreateInput(data: AcademicYearCreateInput) {
@@ -24,8 +25,8 @@ function parseCreateInput(data: AcademicYearCreateInput) {
   return {
     schoolIds: [...new Set(parsed.schoolIds)],
     name: parsed.name.trim(),
-    startDate: new Date(parsed.startDate),
-    endDate: new Date(parsed.endDate),
+    startDate: parseCalendarDateInput(parsed.startDate.slice(0, 10)),
+    endDate: parseCalendarDateInput(parsed.endDate.slice(0, 10)),
     isActive: parsed.isActive,
     generateCalendar: parsed.generateCalendar,
   };
@@ -36,8 +37,8 @@ function parseUpdateInput(data: AcademicYearInput) {
   return {
     schoolIds: [...new Set(parsed.schoolIds)],
     name: parsed.name.trim(),
-    startDate: new Date(parsed.startDate),
-    endDate: new Date(parsed.endDate),
+    startDate: parseCalendarDateInput(parsed.startDate.slice(0, 10)),
+    endDate: parseCalendarDateInput(parsed.endDate.slice(0, 10)),
     isActive: parsed.isActive,
     generateCalendar: parsed.generateCalendar,
   };

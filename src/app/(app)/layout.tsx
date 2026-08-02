@@ -36,7 +36,7 @@ export default async function AppLayout({
   return (
     <AppShell
       navGroups={navGroups}
-      userName={user.fullName ?? user.userId}
+      userName={user.staffFullName ?? user.fullName ?? user.userId}
       userEmail={user.userId}
       academicYears={yearsForSidebar}
       selectedAcademicYearId={selectedAcademicYear?.id ?? null}

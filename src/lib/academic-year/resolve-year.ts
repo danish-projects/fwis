@@ -8,6 +8,10 @@ import {
 import { canSwitchAcademicYear } from "@/lib/academic-year/can-switch-year";
 import { findCurrentAcademicYearSchoolForSchool } from "@/lib/academic-year/find-current-year";
 import { listAcademicYearsForUser } from "@/lib/academic-year/list-years";
+import {
+  calendarDateKey,
+  schoolTodayKey,
+} from "@/lib/calendar/calendar-date";
 
 async function assertUserCanAccessYear(user: AuthUser, yearId: string) {
   const year = await prisma.academicYear.findFirst({
@@ -46,11 +50,12 @@ async function defaultYearForUser(
     }
   }
 
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
+  const todayKey = schoolTodayKey();
 
   const byDate = available.find(
-    (y) => y.startDate <= today && y.endDate >= today
+    (y) =>
+      calendarDateKey(y.startDate) <= todayKey &&
+      calendarDateKey(y.endDate) >= todayKey
   );
   if (byDate) return byDate;
 

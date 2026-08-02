@@ -17,7 +17,7 @@ export default async function TeacherAttendanceClassPage({
   params,
   searchParams,
 }: PageProps) {
-  const user = await requireRole("TEACHER");
+  const user = await requireRole("TEACHER", "SUBSTITUTE");
   const { classroomId } = await params;
   const { day } = await searchParams;
 

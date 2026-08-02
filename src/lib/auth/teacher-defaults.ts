@@ -2,7 +2,7 @@
 
 import { redirect } from "next/navigation";
 import { getSessionUser, type AuthUser } from "@/lib/auth/session";
-import { getPrimaryRole } from "@/lib/auth/permissions";
+import { isTeacherOrSubstitute } from "@/lib/auth/permissions";
 import { prisma } from "@/lib/prisma";
 import { selectDefaultCalendarDayId } from "@/lib/calendar/select-default-day";
 import { ATTENDANCE_MARKABLE_SESSION_TYPES } from "@/lib/grades/attendance-percentage";
@@ -16,7 +16,7 @@ import { getSelectedSchool } from "@/lib/school/resolve-school";
 export async function getTeacherPrimaryClassroomId(
   user: AuthUser
 ): Promise<string | null> {
-  if (!user.roles.includes("TEACHER") || user.classroomIds.length === 0) {
+  if (!isTeacherOrSubstitute(user.roles) || user.classroomIds.length === 0) {
     return null;
   }
   const classrooms = await prisma.classroom.findMany({
@@ -28,7 +28,7 @@ export async function getTeacherPrimaryClassroomId(
 }
 
 export async function getTeacherClassrooms(user: AuthUser) {
-  if (!user.roles.includes("TEACHER")) return [];
+  if (!isTeacherOrSubstitute(user.roles)) return [];
   const selectedSchool = await getSelectedSchool(user);
   const preferredSchoolIds = [
     ...(selectedSchool ? [selectedSchool.id] : []),
@@ -107,7 +107,7 @@ export async function getDefaultAttendanceDayId(
 
 export async function redirectTeacherToAttendance() {
   const user = await getSessionUser();
-  if (!user || getPrimaryRole(user.roles) !== "TEACHER") return;
+  if (!user || !isTeacherOrSubstitute(user.roles)) return;
 
   const classroomId = await getTeacherPrimaryClassroomId(user);
   if (!classroomId) return;
@@ -118,7 +118,7 @@ export async function redirectTeacherToAttendance() {
 
 export async function redirectTeacherToAssessments() {
   const user = await getSessionUser();
-  if (!user || getPrimaryRole(user.roles) !== "TEACHER") return;
+  if (!user || !isTeacherOrSubstitute(user.roles)) return;
 
   redirect("/teacher/assessments");
 }

@@ -22,6 +22,7 @@ import { getGradingScale } from "@/lib/grades/get-grading-scale";
 import { getSelectedAcademicYear, resolveAcademicYearForSchool } from "@/lib/academic-year/resolve-year";
 import { pickSchoolLink } from "@/lib/classrooms/ensure-classroom-for-school";
 import { getSelectedSchool } from "@/lib/school/resolve-school";
+import { ENROLLMENT_BY_STUDENT_NAME_ORDER_BY } from "@/lib/students/sort-students";
 import {
   buildAssessmentColumnDates,
   type AssessmentColumnDates,
@@ -140,7 +141,7 @@ async function getScoreMatrix(classroomId: string, globalYearId?: string) {
           select: { type: true, score: true },
         },
       },
-      orderBy: { student: { lastName: "asc" } },
+      orderBy: ENROLLMENT_BY_STUDENT_NAME_ORDER_BY,
     }),
     loadAssessmentColumnDates(schoolYearId),
   ]);
@@ -265,7 +266,7 @@ export async function getTranscriptMatrix(classroomId: string, academicYearId?: 
         },
         finalGrade: true,
       },
-      orderBy: { student: { lastName: "asc" } },
+      orderBy: ENROLLMENT_BY_STUDENT_NAME_ORDER_BY,
     }),
     loadAssessmentColumnDates(schoolYearId),
   ]);

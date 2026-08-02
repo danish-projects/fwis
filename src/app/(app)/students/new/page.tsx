@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { createStudent } from "@/actions/students";
 import { StudentForm } from "@/components/students/student-form";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { toastStudentSaveError } from "@/lib/students/toast-student-save-error";
 
 export default function NewStudentPage() {
   const router = useRouter();
@@ -18,7 +19,7 @@ export default function NewStudentPage() {
       toast.success("Student created");
       router.push(`/enrollments/new?studentId=${student.id}`);
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Failed to create student");
+      toastStudentSaveError(error, "Could not create student");
       setLoading(false);
     }
   }

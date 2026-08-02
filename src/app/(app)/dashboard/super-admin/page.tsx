@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { requireRole, getSessionUser } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
 import { calculateSchoolHealthScore } from "@/lib/grades/calculate-final-grade";
@@ -8,8 +9,9 @@ import { DashboardCalendarHighlights } from "@/components/dashboard/dashboard-ca
 import { StudentsStatCard } from "@/components/dashboard/students-stat-card";
 import { HealthScoreStatCard } from "@/components/dashboard/health-score-stat-card";
 import { StaffStatCard } from "@/components/dashboard/staff-stat-card";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { formatPercent } from "@/lib/utils";
+import { formatPercent, formatSchoolDateTime } from "@/lib/utils";
 
 export const metadata = { title: "Super Admin Dashboard" };
 
@@ -160,8 +162,11 @@ export default async function SuperAdminDashboardPage() {
         </Card>
 
         <Card>
-          <CardHeader>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0">
             <CardTitle>Recent Activity</CardTitle>
+            <Button asChild variant="outline" size="sm">
+              <Link href="/audit-log">View audit log</Link>
+            </Button>
           </CardHeader>
           <CardContent className="space-y-3">
             {recentActivity.map((log) => (
@@ -172,7 +177,7 @@ export default async function SuperAdminDashboardPage() {
                 </p>
                 <p className="text-muted-foreground">
                   {log.user?.userId ?? "System"} ·{" "}
-                  {new Date(log.createdAt).toLocaleString()}
+                  {formatSchoolDateTime(log.createdAt)}
                 </p>
               </div>
             ))}

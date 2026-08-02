@@ -14,7 +14,7 @@ type PageProps = {
 };
 
 export default async function TeacherLessonPlansPage({ searchParams }: PageProps) {
-  await requireRole("TEACHER");
+  await requireRole("TEACHER", "SUBSTITUTE");
   const params = await searchParams;
   const lessonPlanNumber = params.week ? Number(params.week) : undefined;
 

@@ -36,7 +36,7 @@ function resolveClassroomFilter(
 export default async function TeacherConsolidateAttendancePage({
   searchParams,
 }: PageProps) {
-  await requireRole("TEACHER");
+  await requireRole("TEACHER", "SUBSTITUTE");
   const user = await getSessionUser();
   const { classroom: classroomParam } = await searchParams;
 

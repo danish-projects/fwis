@@ -44,7 +44,7 @@ export async function assertLessonPlanGradeAccess(
     throw new Error("Forbidden");
   }
 
-  if (user.roles.includes("TEACHER")) {
+  if (user.roles.includes("TEACHER") || user.roles.includes("SUBSTITUTE")) {
     const hasGradeAccess = await prisma.classroom.findFirst({
       where: {
         gradeId,

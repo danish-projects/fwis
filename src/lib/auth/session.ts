@@ -19,6 +19,8 @@ export type AuthUser = {
   /** Login handle (app_users.user_id), not an email address. */
   userId: string;
   fullName: string | null;
+  /** Staff first + last when linked; prefer this for sidebar display. */
+  staffFullName: string | null;
   roles: UserRoleCode[];
   schoolIds: string[];
   gender: GenderCode | null;
@@ -81,6 +83,7 @@ export async function getSessionUser(): Promise<AuthUser | null> {
       roles: { include: { role: true } },
       schools: true,
       staff: {
+        where: { deletedAt: null },
         include: {
           assignments: {
             include: { role: true },
@@ -97,10 +100,10 @@ export async function getSessionUser(): Promise<AuthUser | null> {
   const gender = (appUser.gender as GenderCode | null) ?? null;
 
   const yearSchoolIds = await resolveYearSchoolIdsForSession(schoolIds, roles);
-  const yearAssignments =
-    appUser.staff?.assignments.filter((a) =>
-      yearSchoolIds.includes(a.academicYearSchoolId)
-    ) ?? [];
+  const linkedStaff = appUser.staff ?? [];
+  const yearAssignments = linkedStaff.flatMap((s) =>
+    s.assignments.filter((a) => yearSchoolIds.includes(a.academicYearSchoolId))
+  );
 
   const staffRoleCode = yearAssignments[0]?.role.code;
   const isSubstituteTeacher = staffRoleCode === "SUBSTITUTE";
@@ -108,6 +111,10 @@ export async function getSessionUser(): Promise<AuthUser | null> {
   let classroomIds = yearAssignments
     .map((a) => a.classroomId)
     .filter((id): id is string => Boolean(id));
+
+  // Prefer staff at one of the user's schools for display / primary staffId.
+  const primaryStaff =
+    linkedStaff.find((s) => schoolIds.includes(s.schoolId)) ?? linkedStaff[0];
 
   // Substitute teachers (and gendered school admins without a linked classroom)
   // see every grade in their Boys/Girls section.
@@ -121,14 +128,22 @@ export async function getSessionUser(): Promise<AuthUser | null> {
     classroomIds = await resolveSectionScopedClassroomIds(schoolIds, gender);
   }
 
+  const staffFullName = primaryStaff
+    ? [primaryStaff.firstName, primaryStaff.lastName]
+        .map((part) => part.trim())
+        .filter(Boolean)
+        .join(" ") || null
+    : null;
+
   return {
     id: appUser.id,
     userId: appUser.userId,
     fullName: appUser.fullName,
+    staffFullName,
     roles,
     schoolIds,
     gender,
-    staffId: appUser.staff?.id,
+    staffId: primaryStaff?.id,
     staffRoleCode,
     isSubstituteTeacher,
     classroomIds,

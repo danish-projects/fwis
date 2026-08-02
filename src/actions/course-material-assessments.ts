@@ -64,7 +64,7 @@ async function listGradesForCourseMaterials(
   user: NonNullable<Awaited<ReturnType<typeof getSessionUser>>>,
   schoolId: string
 ): Promise<CourseMaterialAssessmentGradeOption[]> {
-  if (user.roles.includes("TEACHER")) {
+  if (user.roles.includes("TEACHER") || user.roles.includes("SUBSTITUTE")) {
     const teacherClassrooms = await getTeacherClassrooms(user);
     const gradeMap = new Map<
       number,

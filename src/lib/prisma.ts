@@ -11,6 +11,8 @@ type PgPoolOptions = {
   connectionTimeoutMillis?: number;
   idleTimeoutMillis?: number;
   allowExitOnIdle?: boolean;
+  /** Passed to libpq — forces CURRENT_TIMESTAMP into school timezone for naive timestamps. */
+  options?: string;
 };
 
 function isRemoteHostedPostgres(url: string): boolean {
@@ -33,9 +35,17 @@ function stripSslQueryParams(url: string): string {
   }
 }
 
+function schoolPgTimeZoneOption(): string {
+  const zone = process.env.SCHOOL_TIMEZONE?.trim() || "America/Chicago";
+  // libpq options: -c TimeZone=America/Chicago
+  return `-c TimeZone=${zone}`;
+}
+
 function createPgPoolConfig(rawUrl: string): PgPoolOptions {
+  const timeZoneOption = schoolPgTimeZoneOption();
+
   if (!isRemoteHostedPostgres(rawUrl)) {
-    return { connectionString: rawUrl };
+    return { connectionString: rawUrl, options: timeZoneOption };
   }
 
   const rejectUnauthorized =
@@ -56,6 +66,7 @@ function createPgPoolConfig(rawUrl: string): PgPoolOptions {
       : 15_000,
     idleTimeoutMillis: 30_000,
     allowExitOnIdle: true,
+    options: timeZoneOption,
   };
 }
 
@@ -76,7 +87,7 @@ export function createPrismaClient(connectionString?: string) {
 }
 
 /** Bump when schema/runtime client shape changes so HMR does not reuse a stale client. */
-const PRISMA_CLIENT_CACHE_KEY = "fwis-prisma-20250721-pool-timeout";
+const PRISMA_CLIENT_CACHE_KEY = "fwis-prisma-20250802-school-tz";
 
 const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined;

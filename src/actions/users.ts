@@ -122,7 +122,7 @@ export async function getUsers(rawParams: {
       include: {
         roles: { include: { role: true } },
         schools: { include: { school: { select: { id: true, name: true } } } },
-        staff: { select: { id: true } },
+        staff: { select: { id: true }, take: 5 },
       },
     }),
     prisma.appUser.count({ where }),
@@ -149,6 +149,7 @@ export async function getUserById(id: string) {
       roles: { include: { role: true } },
       schools: { include: { school: true } },
       staff: {
+        where: { deletedAt: null },
         include: {
           school: { select: { id: true, name: true } },
           assignments: {
@@ -166,6 +167,7 @@ export async function getUserById(id: string) {
             },
           },
         },
+        orderBy: [{ lastName: "asc" }, { firstName: "asc" }],
       },
     },
   });

@@ -30,6 +30,7 @@ import {
   validateImportStaff,
   validateStudentTeacherCoverage,
   formatStaffValidation,
+  isImportClassroomRole,
   resolveImportStaffLoginUserId,
 } from "./import/validate-teachers";
 import {
@@ -199,11 +200,14 @@ async function main() {
     }
 
     if (!confirmed) {
-      console.log("\nImport cancelled. No data was deleted.");
+      console.log(
+        "\nImport cancelled. No changes made — Staff/Students and app user logins were not deleted."
+      );
       return;
     }
 
-    console.log("\nDeleting existing data for this school and academic year only...");
+    console.log("\nReplacing Staff + Students roster for this school/year only...");
+    console.log("App user logins are kept (never deleted by import).");
     const purged = await purgeSchoolYearImportData(
       prisma,
       school.id,
@@ -211,9 +215,6 @@ async function main() {
     );
     console.log("Deleted:");
     console.log(formatSchoolYearCounts(purged));
-    if (purged.orphanStudentsRemoved > 0) {
-      console.log(`  Orphan students:  ${purged.orphanStudentsRemoved}`);
-    }
     console.log("");
   }
 
@@ -255,22 +256,113 @@ async function main() {
   let staffLoginsExisting = 0;
   let teachersImported = 0;
 
+  /** Contact email is optional on the sheet; staff identity is login user_id. */
+  function contactEmailForStaff(loginUserId: string, rawEmail: string): string {
+    const email = rawEmail.trim().toLowerCase();
+    if (email) return email;
+    // Unique placeholder so blank emails do not collide on schoolId+email.
+    return `${loginUserId.replace(/[^a-z0-9._-]/gi, "-")}@staff.fwis.local`;
+  }
+
+  /**
+   * Resolve staff by derived login user_id only (not email).
+   * Email is stored as contact info and may be blank on the sheet.
+   */
+  async function resolveStaffForImportRow(options: {
+    loginUserId: string;
+    email: string;
+    firstName: string;
+    lastName: string;
+    gender: "MALE" | "FEMALE";
+    phone: string | null;
+    rowNum: number;
+  }) {
+    const contactEmail = contactEmailForStaff(
+      options.loginUserId,
+      options.email
+    );
+    const profile = {
+      gender: options.gender,
+      firstName: options.firstName,
+      lastName: options.lastName,
+      phone: options.phone,
+      email: contactEmail,
+      isActive: true,
+      deletedAt: null as Date | null,
+    };
+
+    const byLogin = await prisma.staff.findFirst({
+      where: {
+        schoolId: school.id,
+        deletedAt: null,
+        userId: options.loginUserId,
+      },
+    });
+    if (byLogin) {
+      if (options.email.trim()) {
+        const emailOwner = await prisma.staff.findFirst({
+          where: {
+            schoolId: school.id,
+            email: contactEmail,
+            id: { not: byLogin.id },
+          },
+          select: { id: true, userId: true },
+        });
+        if (emailOwner) {
+          throw new Error(
+            `Staff row ${options.rowNum}: contact email "${contactEmail}" is already used by ` +
+              `staff "${emailOwner.userId ?? emailOwner.id}". ` +
+              `Staff identity is login user_id (${options.loginUserId}); use a different contact email or leave it blank.`
+          );
+        }
+      }
+      return prisma.staff.update({
+        where: { id: byLogin.id },
+        data: profile,
+      });
+    }
+
+    // New staff for this login — never reuse another login's staff row via email.
+    if (options.email.trim()) {
+      const emailOwner = await prisma.staff.findFirst({
+        where: { schoolId: school.id, email: contactEmail },
+        select: { id: true, userId: true },
+      });
+      if (emailOwner) {
+        throw new Error(
+          `Staff row ${options.rowNum}: contact email "${contactEmail}" is already used by ` +
+            `staff "${emailOwner.userId ?? emailOwner.id}". ` +
+            `Leave email blank or use a unique contact email. Login for this row is "${options.loginUserId}".`
+        );
+      }
+    }
+
+    return prisma.staff.create({
+      data: {
+        schoolId: school.id,
+        userId: null,
+        ...profile,
+      },
+    });
+  }
+
   for (const [index, row] of data.staff.entries()) {
-    const email = row.email.trim().toLowerCase();
+    const email = row.email?.trim().toLowerCase() ?? "";
     const firstName = row.first_name.trim();
     const lastName = row.last_name.trim();
+    const rowNum = index + 2;
     const { loginUserId, roleCode, gender } = resolveImportStaffLoginUserId(
       school.cityCode,
       row,
-      index + 2
+      rowNum
     );
     const role = await ensureRoleByCode(prisma, roleCode);
 
-    const isSubstitute = roleCode === "SUBSTITUTE";
+    const isClassroomTeacher = isImportClassroomRole(roleCode);
     let classroomId: string | null = null;
     let classroomKey: string | null = null;
 
-    if (!isSubstitute) {
+    if (isClassroomTeacher) {
       const classroom = await resolveClassroom(row.grade, row.section);
       classroomId = classroom.id;
       classroomKey = classroomLabel(
@@ -279,26 +371,14 @@ async function main() {
       );
     }
 
-    const staff = await prisma.staff.upsert({
-      where: {
-        schoolId_email: { schoolId: school.id, email },
-      },
-      update: {
-        gender,
-        firstName,
-        lastName,
-        phone: row.phone?.trim() || null,
-        isActive: true,
-        deletedAt: null,
-      },
-      create: {
-        schoolId: school.id,
-        gender,
-        firstName,
-        lastName,
-        email,
-        phone: row.phone?.trim() || null,
-      },
+    const staff = await resolveStaffForImportRow({
+      loginUserId,
+      email,
+      firstName,
+      lastName,
+      gender,
+      phone: row.phone?.trim() || null,
+      rowNum,
     });
 
     await prisma.staffAssignment.upsert({
@@ -323,7 +403,7 @@ async function main() {
     const loginResult = await linkStaffToExistingAppUser(prisma, {
       staffId: staff.id,
       loginUserId,
-      email,
+      email: staff.email,
       fullName: `${firstName} ${lastName}`,
       gender,
       schoolId: school.id,
@@ -340,7 +420,8 @@ async function main() {
   }
   console.log(`Staff imported: ${data.staff.length} (${teachersImported} teachers)`);
   console.log(
-    `Staff logins: ${staffLoginsLinked} linked, ${staffLoginsExisting} already linked`
+    `Staff logins: ${staffLoginsLinked} newly linked, ${staffLoginsExisting} already linked ` +
+      `(app users are never created by import)`
   );
 
   const schoolCityCode = school.cityCode;

@@ -1,16 +1,11 @@
 import { prisma } from "@/lib/prisma";
-
-function startOfDay(date: Date) {
-  const d = new Date(date);
-  d.setHours(0, 0, 0, 0);
-  return d;
-}
+import { schoolTodayUtcDate } from "@/lib/calendar/calendar-date";
 
 export async function findCurrentAcademicYearSchoolForSchool(
   schoolId: string,
   referenceDate = new Date()
 ) {
-  const today = startOfDay(referenceDate);
+  const today = schoolTodayUtcDate(referenceDate);
 
   const byDateRange = await prisma.academicYearSchool.findFirst({
     where: {

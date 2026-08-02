@@ -46,6 +46,7 @@ export function mockUser(
     id: "u0000000-0000-4000-8000-000000000001",
     userId: "test.user",
     fullName: "Test User",
+    staffFullName: null,
     roles,
     schoolIds: roles.includes("NIGRA") ? [] : [IDS.schoolHou],
     classroomIds: roles.includes("TEACHER") ? [IDS.classroomG1Boys] : [],

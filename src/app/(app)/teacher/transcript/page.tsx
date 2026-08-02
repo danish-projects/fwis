@@ -6,7 +6,7 @@ import { Card, CardContent } from "@/components/ui/card";
 export const metadata = { title: "Transcript" };
 
 export default async function TeacherTranscriptPage() {
-  const user = await requireRole("TEACHER");
+  const user = await requireRole("TEACHER", "SUBSTITUTE");
   const classroomId = await getTeacherPrimaryClassroomId(user);
 
   if (classroomId) {

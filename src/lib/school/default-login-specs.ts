@@ -45,17 +45,32 @@ export function schoolLoginSlug(city: string): string {
 
 /**
  * Derive app login user_id for importable Staff roles.
+ * Principal: `{code}.principal`
+ * School Admin: `{code}.m.admin` / `{code}.f.admin` from gender
  * Teacher: `{code}.b.g1` / `{code}.g.g1` from grade + section
  * Substitute: `{code}.m.sub` / `{code}.f.sub` from gender
  */
 export function deriveStaffLoginUserId(options: {
   cityCode: string;
-  roleCode: "TEACHER" | "SUBSTITUTE";
+  roleCode: "PRINCIPAL" | "SCHOOL_ADMIN" | "TEACHER" | "SUBSTITUTE";
   grade?: number;
   section?: "Boys" | "Girls";
   gender?: "MALE" | "FEMALE";
 }): string {
   const code = schoolLoginCode(options.cityCode);
+
+  if (options.roleCode === "PRINCIPAL") {
+    return toLoginUserId(`${code}.principal`);
+  }
+
+  if (options.roleCode === "SCHOOL_ADMIN") {
+    if (!options.gender) {
+      throw new Error("School Admin login requires gender (MALE or FEMALE)");
+    }
+    return toLoginUserId(
+      `${code}.${options.gender === "MALE" ? "m" : "f"}.admin`
+    );
+  }
 
   if (options.roleCode === "SUBSTITUTE") {
     if (!options.gender) {

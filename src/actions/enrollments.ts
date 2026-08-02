@@ -28,6 +28,10 @@ import {
 import { resolveListSchoolId } from "@/lib/school/resolve-school";
 import { ensureStudentNumber } from "@/lib/students/student-number";
 import { classroomBelongsToSchool } from "@/lib/classrooms/ensure-classroom-for-school";
+import {
+  parseCalendarDateInput,
+  schoolTodayUtcDate,
+} from "@/lib/calendar/calendar-date";
 
 async function resolveAcademicYearSchoolId(
   schoolId: string,
@@ -49,15 +53,16 @@ async function resolveAcademicYearSchoolId(
 
 function parseEnrollmentData(data: EnrollmentInput) {
   const parsed = enrollmentSchema.parse(data);
+  const enrollKey = parsed.enrollmentDate?.trim().slice(0, 10);
   return {
     studentId: parsed.studentId,
     schoolId: parsed.schoolId,
     academicYearId: parsed.academicYearId,
     classroomId: parsed.classroomId,
     staffId: parsed.staffId || null,
-    enrollmentDate: parsed.enrollmentDate
-      ? new Date(parsed.enrollmentDate)
-      : new Date(),
+    enrollmentDate: enrollKey
+      ? parseCalendarDateInput(enrollKey)
+      : schoolTodayUtcDate(),
     status: parsed.status,
   };
 }

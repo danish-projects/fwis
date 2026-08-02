@@ -230,20 +230,6 @@ async function ensureHoustonAdminLogin(
 
   let linked = false;
   if (staffId) {
-    const otherStaff = await prisma.staff.findFirst({
-      where: {
-        userId: loginUserId,
-        id: { not: staffId },
-        deletedAt: null,
-      },
-      select: { id: true },
-    });
-    if (otherStaff) {
-      throw new Error(
-        `Login "${loginUserId}" is already linked to a different staff record.`
-      );
-    }
-
     const linkResult = await prisma.staff.updateMany({
       where: { id: staffId, userId: null },
       data: { userId: loginUserId },

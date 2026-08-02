@@ -25,6 +25,18 @@ import {
   decryptStudentPiiList,
   encryptStudentPiiForDb,
 } from "@/lib/students/student-pii";
+import { STUDENT_NAME_ORDER_BY } from "@/lib/students/sort-students";
+import {
+  duplicateStudentUserError,
+  throwStudentSaveUserError,
+  toStudentSaveUserError,
+  type DuplicateMatchReason,
+} from "@/lib/students/student-save-errors";
+import {
+  parseCalendarDateInput,
+  schoolTodayUtcDate,
+} from "@/lib/calendar/calendar-date";
+import { ZodError } from "zod";
 
 async function buildEnrollmentYearFilter(user: AuthUser) {
   const selectedYear = await getSelectedAcademicYear(user);
@@ -65,11 +77,13 @@ async function buildEnrollmentYearFilter(user: AuthUser) {
 
 function parseStudentData(data: StudentInput) {
   const parsed = studentSchema.parse(data);
+  const dobKey = parsed.dateOfBirth?.trim().slice(0, 10);
+  const enrollKey = parsed.enrollmentDate?.trim().slice(0, 10);
   return {
     firstName: parsed.firstName.trim(),
     lastName: parsed.lastName.trim(),
     gender: parsed.gender,
-    dateOfBirth: parsed.dateOfBirth ? new Date(parsed.dateOfBirth) : null,
+    dateOfBirth: dobKey ? parseCalendarDateInput(dobKey) : null,
     emailAddress: parsed.emailAddress?.trim() || null,
     streetAddress: parsed.streetAddress?.trim() || null,
     city: parsed.city?.trim() || null,
@@ -85,9 +99,9 @@ function parseStudentData(data: StudentInput) {
     motherParentalResponsibility: parsed.motherParentalResponsibility ?? null,
     motherMobileWhatsappNumber: parsed.motherMobileWhatsappNumber?.trim() || null,
     emergencyContact: parsed.emergencyContact?.trim() || null,
-    enrollmentDate: parsed.enrollmentDate
-      ? new Date(parsed.enrollmentDate)
-      : new Date(),
+    enrollmentDate: enrollKey
+      ? parseCalendarDateInput(enrollKey)
+      : schoolTodayUtcDate(),
     isActive: parsed.isActive,
   };
 }
@@ -126,7 +140,10 @@ function buildStudentDbPayload(
   };
 }
 
-async function findDuplicateStudent(data: ReturnType<typeof parseStudentData>) {
+async function findDuplicateStudent(
+  data: ReturnType<typeof parseStudentData>,
+  excludeId?: string
+): Promise<{ id: string; reason: DuplicateMatchReason } | null> {
   const pii = encryptStudentPiiForDb({
     dateOfBirth: data.dateOfBirth,
     emailAddress: data.emailAddress,
@@ -144,144 +161,177 @@ async function findDuplicateStudent(data: ReturnType<typeof parseStudentData>) {
     motherMobileWhatsappNumber: data.motherMobileWhatsappNumber,
   });
 
-  const conditions: Prisma.StudentWhereInput[] = [
-    {
+  const notSelf = excludeId ? { id: { not: excludeId } } : {};
+
+  // Guardians may have multiple children — do not treat shared phone as a duplicate.
+  const byName = await prisma.student.findFirst({
+    where: {
       deletedAt: null,
+      ...notSelf,
       firstName: { equals: data.firstName, mode: "insensitive" },
       lastName: { equals: data.lastName, mode: "insensitive" },
       ...(pii.dateOfBirthHash ? { dateOfBirthHash: pii.dateOfBirthHash } : {}),
     },
-  ];
-
-  if (pii.fatherMobileWhatsappHash) {
-    conditions.push({
-      deletedAt: null,
-      OR: [
-        { fatherMobileWhatsappHash: pii.fatherMobileWhatsappHash },
-        { motherMobileWhatsappHash: pii.fatherMobileWhatsappHash },
-      ],
-    });
-  }
-  if (pii.motherMobileWhatsappHash) {
-    conditions.push({
-      deletedAt: null,
-      OR: [
-        { motherMobileWhatsappHash: pii.motherMobileWhatsappHash },
-        { fatherMobileWhatsappHash: pii.motherMobileWhatsappHash },
-      ],
-    });
-  }
-
-  const duplicate = await prisma.student.findFirst({
-    where: { OR: conditions },
+    select: { id: true },
+    orderBy: { createdAt: "asc" },
   });
 
-  return duplicate ? decryptStudentPii(duplicate) : null;
+  if (!byName) return null;
+
+  return {
+    id: byName.id,
+    reason: pii.dateOfBirthHash ? "name_and_dob" : "name_only",
+  };
 }
 
 async function ensureStudentAccess(user: AuthUser, studentId: string) {
   const allowed = await assertStudentAccess(user, studentId);
-  if (!allowed) throw new Error("Unauthorized access to student");
+  if (!allowed) {
+    throwStudentSaveUserError({
+      title: "You cannot save this student",
+      description:
+        "Your account does not have permission to update this record. Ask a school admin or principal for access.",
+    });
+  }
+}
+
+function rethrowStudentMutationError(error: unknown, fallbackTitle: string): never {
+  if (
+    error instanceof Error &&
+    error.message.includes("||") &&
+    !error.message.includes("Server Components")
+  ) {
+    throw error;
+  }
+  if (error instanceof ZodError) {
+    throwStudentSaveUserError(toStudentSaveUserError(error, fallbackTitle));
+  }
+  throwStudentSaveUserError(toStudentSaveUserError(error, fallbackTitle));
 }
 
 export async function createStudent(data: StudentInput) {
   const user = await requirePermission("students:create");
-  const studentData = parseStudentData(data);
 
-  const duplicate = await findDuplicateStudent(studentData);
-  if (duplicate) {
-    throw new Error(
-      "A student with matching name, date of birth, or guardian phone already exists. Use the existing record."
-    );
+  try {
+    const studentData = parseStudentData(data);
+
+    const duplicate = await findDuplicateStudent(studentData);
+    if (duplicate) {
+      throwStudentSaveUserError(
+        duplicateStudentUserError(duplicate.reason, "create")
+      );
+    }
+
+    const originSchoolId = user.roles.includes("NIGRA")
+      ? null
+      : user.schoolIds[0] ?? null;
+
+    const student = await prisma.student.create({
+      data: buildStudentDbPayload(studentData, { originSchoolId }),
+    });
+
+    await createAuditLog({
+      userId: user.id,
+      entity: "Student",
+      entityId: student.id,
+      action: "CREATE",
+      newValues: { id: student.id, firstName: student.firstName, lastName: student.lastName },
+    });
+
+    revalidatePath("/students");
+    return { id: student.id };
+  } catch (error) {
+    rethrowStudentMutationError(error, "Could not create student");
   }
-
-  const originSchoolId = user.roles.includes("NIGRA")
-    ? null
-    : user.schoolIds[0] ?? null;
-
-  const student = await prisma.student.create({
-    data: buildStudentDbPayload(studentData, { originSchoolId }),
-  });
-
-  await createAuditLog({
-    userId: user.id,
-    entity: "Student",
-    entityId: student.id,
-    action: "CREATE",
-    newValues: { id: student.id, firstName: student.firstName, lastName: student.lastName },
-  });
-
-  revalidatePath("/students");
-  return decryptStudentPii(student);
 }
 
 export async function updateStudent(id: string, data: StudentInput) {
   const user = await requirePermission("students:update");
   await ensureStudentAccess(user, id);
 
-  const studentData = parseStudentData(data);
+  try {
+    const studentData = parseStudentData(data);
 
-  const before = await prisma.student.findUnique({ where: { id } });
-  if (!before || before.deletedAt) throw new Error("Student not found");
+    const before = await prisma.student.findUnique({ where: { id } });
+    if (!before || before.deletedAt) {
+      throwStudentSaveUserError({
+        title: "Student not found",
+        description:
+          "This student may have been deleted. Go back to Students and open the record again.",
+      });
+    }
 
-  const duplicate = await findDuplicateStudent(studentData);
-  if (duplicate && duplicate.id !== id) {
-    throw new Error(
-      "Another student with matching name, date of birth, or guardian phone already exists."
-    );
+    const duplicate = await findDuplicateStudent(studentData, id);
+    if (duplicate) {
+      throwStudentSaveUserError(
+        duplicateStudentUserError(duplicate.reason, "update")
+      );
+    }
+
+    const student = await prisma.student.update({
+      where: { id },
+      data: buildStudentDbPayload(studentData),
+    });
+
+    await createAuditLog({
+      userId: user.id,
+      entity: "Student",
+      entityId: student.id,
+      action: "UPDATE",
+      oldValues: {
+        id: before.id,
+        firstName: before.firstName,
+        lastName: before.lastName,
+        isActive: before.isActive,
+      },
+      newValues: {
+        id: student.id,
+        firstName: student.firstName,
+        lastName: student.lastName,
+        isActive: student.isActive,
+      },
+    });
+
+    revalidatePath("/students");
+    revalidatePath(`/students/${id}`);
+    return { id: student.id };
+  } catch (error) {
+    rethrowStudentMutationError(error, "Could not update student");
   }
-
-  const student = await prisma.student.update({
-    where: { id },
-    data: buildStudentDbPayload(studentData),
-  });
-
-  await createAuditLog({
-    userId: user.id,
-    entity: "Student",
-    entityId: student.id,
-    action: "UPDATE",
-    oldValues: {
-      id: before.id,
-      firstName: before.firstName,
-      lastName: before.lastName,
-      isActive: before.isActive,
-    },
-    newValues: {
-      id: student.id,
-      firstName: student.firstName,
-      lastName: student.lastName,
-      isActive: student.isActive,
-    },
-  });
-
-  revalidatePath("/students");
-  revalidatePath(`/students/${id}`);
-  return decryptStudentPii(student);
 }
 
 export async function deleteStudent(id: string) {
   const user = await requirePermission("students:delete");
   await ensureStudentAccess(user, id);
 
-  const before = await prisma.student.findUnique({ where: { id } });
-  if (!before || before.deletedAt) throw new Error("Student not found");
+  try {
+    const before = await prisma.student.findUnique({ where: { id } });
+    if (!before || before.deletedAt) {
+      throwStudentSaveUserError({
+        title: "Student not found",
+        description:
+          "This student may have already been deleted. Go back to Students and refresh the list.",
+      });
+    }
 
-  const student = await prisma.student.update({
-    where: { id },
-    data: { deletedAt: new Date(), isActive: false },
-  });
+    await prisma.student.update({
+      where: { id },
+      data: { deletedAt: new Date(), isActive: false },
+    });
 
-  await createAuditLog({
-    userId: user.id,
-    entity: "Student",
-    entityId: student.id,
-    action: "DELETE",
-    oldValues: { id: before.id, firstName: before.firstName, lastName: before.lastName },
-  });
+    await createAuditLog({
+      userId: user.id,
+      entity: "Student",
+      entityId: before.id,
+      action: "DELETE",
+      oldValues: { id: before.id, firstName: before.firstName, lastName: before.lastName },
+    });
 
-  revalidatePath("/students");
-  return decryptStudentPii(student);
+    revalidatePath("/students");
+    return { id };
+  } catch (error) {
+    rethrowStudentMutationError(error, "Could not delete student");
+  }
 }
 
 export async function getStudents(rawParams: {
@@ -305,7 +355,13 @@ export async function getStudents(rawParams: {
     listSchoolId,
   });
 
-  const orderBy = { [params.sort]: params.order } as Prisma.StudentOrderByWithRelationInput;
+  const orderBy =
+    params.sort === "lastName"
+      ? [
+          { lastName: params.order },
+          { firstName: params.order },
+        ]
+      : ({ [params.sort]: params.order } as Prisma.StudentOrderByWithRelationInput);
   const enrollmentVisibility = buildStudentEnrollmentVisibilityFilter(
     user,
     enrollmentWhere,
@@ -396,7 +452,7 @@ export async function exportStudentsCsv(rawParams: {
 
   const students = await prisma.student.findMany({
     where: mergeStudentQueryFilters(where, enrollmentVisibility),
-    orderBy: { lastName: "asc" },
+    orderBy: STUDENT_NAME_ORDER_BY,
     include: {
       enrollments: {
         where: enrollmentWhere,
